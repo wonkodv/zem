@@ -43,7 +43,13 @@ def files(settings={}):
     """Index the directory Tree."""
     root    = settings.get("root",    ".")
     pattern = settings.get("pattern", ["**/*.*"])
-    exclude = settings.get("exclude", [ "*~", ".git/.", ".svn/", "*.pyc", "*.o", "*.class", ])
+    exclude = settings.get("exclude", [
+        "*~",
+        ".*/",
+        "*.pyc",
+        "*.o",
+        "*.class",
+    ])
     fullpath= settings.get("matchpath", False)
     typ     = settings.get("type",    "File")
 
@@ -72,7 +78,7 @@ def tags(settings):
         elif pathlib.Path(".tags").exists():
             tag_file = ".tags"
         else:
-            return
+            return []
     if not type_map:
         type_map = {
             'd':'Define',
@@ -99,6 +105,8 @@ def tags(settings):
             match = parts[0]
             file  = parts[1]
             location = parts[2]
+            if location[-2:] == ';"':
+                location = location[:-2]
             typ = ""
             for field in parts[3:]:
                 if not ':' in field:

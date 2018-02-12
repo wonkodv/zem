@@ -31,6 +31,8 @@ class Plugin(object):
     def _on_error(self):
         import traceback
         lines = traceback.format_exc()
+        with open(".zem.errors","wt") as f:
+            f.write(lines)
         lines = lines.split("\n")
         self.set_buffer(lines)
 
@@ -56,14 +58,22 @@ class Plugin(object):
         cmd = "edit"
         l = match['location']
         if l:
-            for s in "\\ []":
-                l = l.replace(s, "\\"+s) # TODO: proper escape
+            if l[0] == '/':
+                l = l[1:]
+                if l[-1] == '/':
+                    l = l[:-1]
+                else:
+                    raise ValueError("bad location", match['location'])
+                l = r"/\M{}/".format(l) # use  nomagic mode, where only ^ $ / and \ are magic
+                l = l.replace("\\","\\\\").replace(" ","\\ ") # replace space, double no of escapes
             cmd += " +" + l
         if tab:
             cmd = 'tab' + cmd
         cmd = cmd + " " + match['file']
+        self.nvim.vars['zem_last_command'] = cmd
         try:
             self.nvim.command(cmd)
+            self.nvim.command("nohlsearch|redraw")
         except neovim.api.nvim.NvimError:
             pass # something like ATTENTION, swapfile or so..
 
@@ -96,15 +106,16 @@ class Plugin(object):
         """Open the ZEM Window"""
         self.nvim.command("wincmd n")
         self.buffer = self.nvim.current.buffer
+        self.buffer.name = "ZEM"
         self.nvim.command("setlocal winminheight=1")
         self.nvim.command("setlocal buftype=nofile")
         self.nvim.command("setlocal bufhidden=delete")
+        self.nvim.command("setlocal filetype=zem_preview")
         self.nvim.command("setlocal noswapfile")
         self.nvim.command("setlocal nobuflisted")
         self.nvim.command("setlocal nowrap")
         self.nvim.command("setlocal nonumber")
         self.nvim.command("setlocal nolist")
-        self.buffer.name = "ZEM"
         self.nvim.command("wincmd J")
         self.nvim.command("redraw")
         for k in "up down tab cr c-u".split():
