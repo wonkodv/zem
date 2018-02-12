@@ -32,18 +32,6 @@ class DBTest(unittest.TestCase):
             ["CONST_B","Define","file.B",10],
         ])
 
-    def test_tokenstowhere(self):
-        def h(s):
-            s,p = self.db._tokens_to_where_clause(*tokenize(s))
-            s = s.split()
-            s = " ".join(s)
-            return s,p
-
-        self.assertEqual(h("abc =D def =Fil j"),
-                ('match LIKE ? AND match LIKE ? AND match LIKE ? AND (type LIKE ? OR type LIKE ?)',
-                ["%a%b%c%","%d%e%f%","%j%","D%","Fil%"])
-            )
-
     def test_getmatches_simple(self):
         m = self.db.get(*tokenize("fla"))
         assert len(m) == 1
@@ -59,11 +47,24 @@ class DBTest(unittest.TestCase):
         m = self.db.get(*tokenize("con =Fi"))
         assert len(m) == 0
 
-    def test_scanFiles(self):
+    def test_scanFill(self):
         data = ["test.py","File","test.py","123"]
         self.db.fill([data])
         m = self.db.get(*tokenize("tst.y"))
         assert list(m[0]) == data
+
+    def test_order(self):
+        data = [
+                [ "order_2", "A", "",""],
+                [ "order_1", "B", "",""],
+            ]
+        self.db.fill(data)
+        m = self.db.get(*tokenize("order"))
+        assert [r[0] for r in m] == ["order_1", "order_2"]
+        m = self.db.get(*tokenize("=A =B order"))
+        assert [r[0] for r in m] == ["order_2", "order_1"]
+        m = self.db.get(*tokenize("=B =A order"))
+        assert [r[0] for r in m] == ["order_1", "order_2"]
 
 class ScanTest(unittest.TestCase):
     def test_translate(self):

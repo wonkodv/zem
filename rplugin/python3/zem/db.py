@@ -39,7 +39,7 @@ class DB:
         con.execute("ANALYZE zem")
 
     def get(self, matches, types, limit=None):
-        w, p = self._tokens_to_where_clause(matches, types)
+        w, o, p = self._tokens_to_where_clause(matches, types)
         q = """
             SELECT
                 *
@@ -48,8 +48,10 @@ class DB:
             WHERE
                 {}
             ORDER BY
-                length(match) ASC
-            """.format(w)
+                length(match) ASC,
+                {}
+                match ASC
+            """.format(w, o)
         if limit:
             q+="""
             LIMIT {:d} """.format(limit)
@@ -77,7 +79,9 @@ class DB:
                     )
             else:
                 c = "1=1"
-        return c,matches+types
+        o = "LIKE(?, type) DESC, "*len(types)
+
+        return c, o, matches+types+types
 
     def close(self):
         self.con.close()
