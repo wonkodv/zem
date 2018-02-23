@@ -68,6 +68,7 @@ class Plugin(object):
         self.nvim.command("setlocal bufhidden=delete")
         self.nvim.command("setlocal noswapfile")
         self.nvim.command("setlocal nobuflisted")
+        self.nvim.command("setlocal nowrap")
         self.nvim.command("setlocal nonumber")
         self.nvim.command("setlocal nolist")
         self.buffer.name = "ZEM"
