@@ -37,8 +37,8 @@ class Plugin(object):
             db_location = pathlib.Path(self.nvim.funcs.getcwd()) / db_location
         return DB(str(db_location))
 
-    @neovim.command("Zem", sync=True)
-    def prompt(self, *args):
+    @neovim.command("Zem", nargs="?", sync=True)
+    def prompt(self, args):
         """Open the ZEM> Prompt."""
         self.db = self._get_db()
         self.candidates = []
@@ -50,7 +50,8 @@ class Plugin(object):
         try:
             self.nvim.funcs.input({
                 'prompt':self.setting("prompt",'ZEM> '),
-                'highlight':'ZemOnKey'
+                'highlight':'ZemOnKey',
+                'default':" ".join(args),
             })
         finally:
             self.nvim.funcs.inputrestore()
