@@ -179,7 +179,8 @@ class Plugin(object):
                     "types: {}".format(t[1])]
                 )
             else:
-                self.set_buffer([ r['match'] for r in results])
+                markup = self.setting("markup","{match:30s}\t{type:15}\t{file}:{location}")
+                self.set_buffer([ markup.format(**r) for r in results])
 
     def set_buffer_usage(self, lines):
         lines = USAGE.format(VERSION, self.db.location).split("\n")+[""] + lines

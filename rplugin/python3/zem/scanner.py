@@ -42,7 +42,7 @@ def translate(patterns):
 def files(settings={}):
     """Index the directory Tree."""
     root    = settings.get("root",    ".")
-    pattern = settings.get("pattern", ["**/*.*"])
+    pattern = settings.get("pattern", ["*.*"])
     exclude = settings.get("exclude", [ "*~", ".git/.", ".svn/", "*.pyc", "*.o", "*.class", ])
     typ     = settings.get("type",    "File")
 
@@ -60,7 +60,7 @@ def files(settings={}):
     return result
 
 def tags(settings):
-    tag_files = settings.get("tag_files")
+    tag_files = settings.get("files")
     type_map  = settings.get('type_map')
     if not tag_files:
         tag_files = []
@@ -73,11 +73,11 @@ def tags(settings):
             'd':'Define',
             'p':'Prototyp',
             'x':'Prototyp',         # extern variable
-            't':'Typedef',          # typedef name
-            'e':'Typedef',          # enum name
-            'u':'Typedef',          # union name
-            's':'Typedef',          # struct name
-            'c':'Typedef',          # class name
+            't':'Type',          # typedef name
+            'e':'Type',          # enum name
+            'u':'Type',          # union name
+            's':'Type',          # struct name
+            'c':'Type',          # class name
             'f':'Implementation',   # function impl
             'v':'Implementation',   # variable
             'l':'Implementation',   # label
