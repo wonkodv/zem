@@ -37,6 +37,31 @@ class Plugin(object):
             db_location = pathlib.Path(self.nvim.funcs.getcwd()) / db_location
         return DB(str(db_location))
 
+    @neovim.command("ZemEdit", nargs="1", sync=True)
+    def edit(self, args):
+        db = self._get_db()
+        text = " ".join(args)
+        t = tokenize(text)
+        m = db.get(*t, limit=1)
+        if m:
+            self._edit(m[0])
+
+    def _edit(self, match, tab=False):
+        cmd = "edit"
+        l = match['location']
+        if l:
+            for s in "\\ []":
+                l = l.replace(s, "\\"+s) # TODO: proper escape
+            cmd += " +" + l
+        if tab:
+            cmd = 'tab' + cmd
+        cmd = cmd + " " + match['file']
+        try:
+            self.nvim.command(cmd)
+        except neovim.api.nvim.NvimError:
+            pass # something like ATTENTION, swapfile or so..
+
+
     @neovim.command("Zem", nargs="?", sync=True)
     def prompt(self, args):
         """Open the ZEM> Prompt."""
@@ -142,20 +167,7 @@ class Plugin(object):
                     if not self.candidates:
                         return
                     m = self.candidates[idx]
-                    cmd = "edit"
-                    l = m['location']
-                    if l:
-                        for s in "\\ []":
-                            l = l.replace(s, "\\"+s) # TODO: proper escape
-                        cmd += " +" + l
-                    if key == 'tab':
-                        cmd = 'tab' + cmd
-                    cmd = cmd + " " + m['file']
-                    self.nvim.command("echomsg '{}'".format(cmd))
-                    try:
-                        self.nvim.command(cmd)
-                    except neovim.api.nvim.NvimError:
-                        pass # something like ATTENTION, swapfile or so..
+                    self._edit(m, tab=(key=='tab'))
                 else:
                     self.set_buffer_usage(["== Unknown Key ==", "detexted {} in {}.".format(key,text)])
                     remove = False

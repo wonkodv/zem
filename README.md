@@ -1,10 +1,14 @@
 ZEM
 ===
 
-
 Neovim plugin that can quickly navigate to previously indexed locations.
 
+Early development, but useable.
+
 It uses the python3 remote plugin api and sqlite.
+
+You can use `:Zem` to open a prompt with preview window that shows the currently matching
+elements, or you can use `:ZemEdit QUERY` to directly go to the location.
 
 Install
 -------
@@ -14,9 +18,11 @@ Install
 
 2.  in nvim: `:UpdateRemotePlugins` and restart
 
-3.  (optionaly) define a mapping in `init.vim`
+3.  (optionaly) define mappings in `init.vim`
 
         nnoremap <S-Y> :Zem<CR>
+        nnoremap <C-y> :Zem<C-R><C-W><CR>
+        nnoremap <C-]> :ZemEdit =Impl <C-R><C-W><CR>
 
 Indexing
 --------
@@ -91,5 +97,4 @@ the option `exrc` is set.)
         *   `files`   (`['.tags', 'tags']`) files to scan
         *   `type_map` (`{'d':'Define','f':'Implementation', ...}`) Map the tag-kind to Element-type.
             The default maps most tag kinds onto one of: `Define`, `Prototyp`, `Typedef`, `Implementation`
-
 
