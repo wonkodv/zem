@@ -87,7 +87,7 @@ def tags(settings):
         }
     result = []
     for t in tag_files:
-        with open(t,"rt") as f:
+        with open(t,"rt", errors="replace") as f:
             for line in f:
                 if line.startswith("!"):
                     continue
