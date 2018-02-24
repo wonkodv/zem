@@ -42,7 +42,7 @@ def translate(patterns):
 def files(settings={}):
     """Index the directory Tree."""
     root    = settings.get("root",    ".")
-    pattern = settings.get("pattern", ["*.*"])
+    pattern = settings.get("pattern", ["**/*.*"])
     exclude = settings.get("exclude", [ "*~", ".git/.", ".svn/", "*.pyc", "*.o", "*.class", ])
     typ     = settings.get("type",    "File")
 
