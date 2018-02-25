@@ -228,11 +228,12 @@ class Plugin(object):
 
     def _update_index(self):
         sources = []
-        for source in self.setting("sources", ['files','tags']):
+        for source, param in self.setting("sources", [['files',{}],['tags',{}]]):
             func = getattr(scanner, source, None)
             if not func:
                 func = self.nvim.funcs[func]
-            param = self.setting("source_{}".format(source), {})
+            base_param = self.setting("source_{}".format(source), {})
+            base_param.update(param)
             sources.append((func, param))
         data=[]
         for func, param in sources:

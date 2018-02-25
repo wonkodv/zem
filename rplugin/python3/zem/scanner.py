@@ -44,40 +44,45 @@ def files(settings={}):
     root    = settings.get("root",    ".")
     pattern = settings.get("pattern", ["**/*.*"])
     exclude = settings.get("exclude", [ "*~", ".git/.", ".svn/", "*.pyc", "*.o", "*.class", ])
+    fullpath= settings.get("matchpath", False)
     typ     = settings.get("type",    "File")
 
     root = pathlib.Path(root)
-    paths = (p.as_posix() for pattern in pattern for p in root.glob(pattern) )
+    paths = ( (p,p.as_posix()) for pattern in pattern for p in root.glob(pattern) )
     if exclude:
         exclude = translate(exclude)
-        paths = ( p for p in paths if not exclude.match(p) )
+        paths = ( (p,s) for (p,s) in paths if not exclude.match(s) )
     result = []
     location = None
-    for p in paths:
-        match = p
-        file = p
+    for p,s in paths:
+        if fullpath:
+            match = s
+        else:
+            match = p.name
+        file = s
         result.append((match, typ, file, location))
     return result
 
 def tags(settings):
-    tag_files = settings.get("files")
+    tag_file = settings.get("file")
     type_map  = settings.get('type_map')
-    if not tag_files:
-        tag_files = []
+    if not tag_file:
         if pathlib.Path("tags").exists():
-            tag_files.append("tags")
-        if pathlib.Path(".tags").exists():
-            tag_files.append(".tags")
+            tag_file = "tags"
+        elif pathlib.Path(".tags").exists():
+            tag_file = ".tags"
+        else:
+            return
     if not type_map:
         type_map = {
             'd':'Define',
             'p':'Prototyp',
             'x':'Prototyp',         # extern variable
-            't':'Type',          # typedef name
-            'e':'Type',          # enum name
-            'u':'Type',          # union name
-            's':'Type',          # struct name
-            'c':'Type',          # class name
+            't':'Type',             # typedef name
+            'e':'Type',             # enum name
+            'u':'Type',             # union name
+            's':'Type',             # struct name
+            'c':'Type',             # class name
             'f':'Implementation',   # function impl
             'v':'Implementation',   # variable
             'l':'Implementation',   # label
@@ -86,19 +91,18 @@ def tags(settings):
             'F':'File',
         }
     result = []
-    for t in tag_files:
-        with open(t,"rt", errors="replace") as f:
-            for line in f:
-                if line.startswith("!"):
-                    continue
-                parts = line.strip().split("\t")
-                match = parts[0]
-                file  = parts[1]
-                location = parts[2]
-                typ = ""
-                for field in parts[3:]:
-                    if not ':' in field:
-                        typ = field
-                        typ = type_map.get(typ, typ+'-tagkind')
-                result.append((match, typ, file, location))
+    with open(tag_file,"rt", errors="replace") as f:
+        for line in f:
+            if line.startswith("!"):
+                continue
+            parts = line.strip().split("\t")
+            match = parts[0]
+            file  = parts[1]
+            location = parts[2]
+            typ = ""
+            for field in parts[3:]:
+                if not ':' in field:
+                    typ = field
+                    typ = type_map.get(typ, typ+'-tagkind')
+            result.append((match, typ, file, location))
     return result
