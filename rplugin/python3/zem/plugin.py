@@ -28,6 +28,12 @@ class Plugin(object):
         self.nvim = nvim
         self.db = None
 
+    def _on_error(self):
+        import traceback
+        lines = traceback.format_exc()
+        lines = lines.split("\n")
+        self.set_buffer(lines)
+
     def setting(self, key, default):
         return self.nvim.vars.get("zem_{}".format(key), default)
 
@@ -78,6 +84,8 @@ class Plugin(object):
                 'highlight':'ZemOnKey',
                 'default':" ".join(args),
             })
+        except KeyboardInterrupt:
+            pass
         finally:
             self.nvim.funcs.inputrestore()
         self.close_window()
@@ -102,6 +110,7 @@ class Plugin(object):
         for k in "up down tab cr c-u".split():
             self.nvim.command("cnoremap <buffer> <{0}> ${0}$".format(k)) # Special keys just add a $KEY$ sequence
         self.set_buffer_usage([])
+
     @neovim.function("ZemOnKey",sync=True)
     def on_key(self, args):
         """This is the `highlight` argument of `input()` and is called on every key.
@@ -141,59 +150,63 @@ class Plugin(object):
         the selected line in the preview window, <TAB> or <CR> use the line
         number to select the candidate and open its file.
         """
-        if '$' in text:
-            _, d, t = text.partition("$")
-            key, d, _ = t.partition("$")
-            if d:
-                remove = True
-                if key == 'up':
-                    self.nvim.command("normal k")
-                    self.nvim.command("redraw")
-                elif key == 'down':
-                    self.nvim.command("normal j")
-                    self.nvim.command("redraw")
-                elif key == 'c-u':
-                    self.set_buffer(["Updating..."])
-                    t = time.perf_counter()
-                    l = self._update_index()
-                    t = time.perf_counter() - t
-                    self.set_buffer(["Scanned {} elements in {:.3f} seconds".format(l,t)])
-                elif key in ['cr','tab']:
-                    line = self.nvim.funcs.line('.')
-                    self.nvim.input("<ESC>")            # finish the input() prompt
-                    self.close_window()                 # destroy the zem window
-                    remove = False
-                    idx = line - 1
-                    if not self.candidates:
+        try:
+            if '$' in text:
+                _, d, t = text.partition("$")
+                key, d, _ = t.partition("$")
+                if d:
+                    if key == 'up':
+                        self.nvim.command("normal k")
+                        self.nvim.command("redraw")
+                    elif key == 'down':
+                        self.nvim.command("normal j")
+                        self.nvim.command("redraw")
+                    elif key == 'c-u':
+                        self.set_buffer(["Updating..."])
+                        t = time.perf_counter()
+                        l = self._update_index()
+                        t = time.perf_counter() - t
+                        self.set_buffer(["Scanned {} elements in {:.3f} seconds".format(l,t)])
+                        self._last_tokens = None
+                    elif key in ['cr','tab']:
+                        line = self.nvim.funcs.line('.')
+                        self.nvim.input("<ESC>")            # finish the input() prompt
+                        self.close_window()                 # destroy the zem window
+                        idx = line - 1
+                        if not self.candidates:
+                            return
+                        m = self.candidates[idx]
+                        self._edit(m, tab=(key=='tab'))
                         return
-                    m = self.candidates[idx]
-                    self._edit(m, tab=(key=='tab'))
-                else:
-                    self.set_buffer_usage(["== Unknown Key ==", "detexted {} in {}.".format(key,text)])
-                    remove = False
-                if remove:
+                    else:
+                        raise ValueError("unknown special key",key,text)
                     self.nvim.input("<BS>"*(len(key)+2)) # remove $key$
-        else:
-            t = tokenize(text)
-            if t == self._last_tokens:  # only query the db if anything changed
-                return
-            if not any(t):
-                self.set_buffer_usage(["== Nothing to Display ==", "Enter a Query"])
-                return
-            self._last_tokens = t
-            results = self.db.get(*t, limit=self.count)
-            results = list(reversed(results))
-            self.candidates = results
-            if not results:
-                self.set_buffer([
-                    "== No Matches ==",
-                    "Maybe update the Database with <C-U>?",
-                    "words: {}".format(t[0]),
-                    "types: {}".format(t[1])]
-                )
             else:
-                markup = self.setting("markup","{match:30s}\t{type:15}\t{file}:{location}")
-                self.set_buffer([ markup.format(**r) for r in results])
+                t = tokenize(text)
+                if t == self._last_tokens:  # only query the db if anything changed
+                    return
+                if not any(t):
+                    self.set_buffer_usage(["== Nothing to Display ==", "Enter a Query"])
+                    return
+                self._last_tokens = t
+                matches, types = t
+                if not types:
+                    types = self.setting("default_types",[])
+                results = self.db.get(matches, types, limit=self.count)
+                results = list(reversed(results))
+                self.candidates = results
+                if not results:
+                    self.set_buffer([
+                        "== No Matches ==",
+                        "Maybe update the Database with <C-U>?",
+                        "words: {}".format(t[0]),
+                        "types: {}".format(t[1])]
+                    )
+                else:
+                    markup = self.setting("markup","{match:30s}\t{type:15}\t{file}:{location}")
+                    self.set_buffer([ markup.format(**r) for r in results])
+        except:
+            self._on_error()
 
     def set_buffer_usage(self, lines):
         lines = USAGE.format(VERSION, self.db.location).split("\n")+[""] + lines
