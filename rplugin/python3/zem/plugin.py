@@ -35,7 +35,8 @@ class Plugin(object):
 
     def __init__(self, nvim):
         self.nvim = nvim
-        self.db = None
+        self._db = None
+        self._last_db_loc = None
 
     def on_error(self):
         import traceback
@@ -49,11 +50,20 @@ class Plugin(object):
         return self.nvim.vars.get("zem_{}".format(key), default)
 
     def get_db(self):
-        db_location = pathlib.Path(self.setting("db",".zem.sqlite"))
-        if not db_location.is_absolute():
-            db_location = pathlib.Path(self.nvim.funcs.getcwd()) / db_location
-        return DB(str(db_location))
-
+        """Lazy get db handle for current cwd/g:zem_db."""
+        loc = self.setting("db",".zem.sqlite")
+        if loc != ":memory:":
+            loc = pathlib.Path(loc)
+            if not loc.is_absolute():
+                    loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
+            loc = str(loc)
+        if loc == self._last_db_loc:
+            return self._db
+        if self._db is not None:
+            self._db.close()
+        self._db = DB(loc)
+        self._last_db_loc = loc
+        return self._db
 
     @neovim.command("ZemUpdateIndex", sync=True)
     def _update_index(self, *args):
@@ -191,7 +201,7 @@ class Plugin(object):
         matches, types = t
         if not types:
             types = self.setting("default_types",[])
-        results = self.db.get(matches, types, limit=self.count)
+        results = self.get_db().get(matches, types, limit=self.count)
         results = list(reversed(results))
         self.candidates = results
         if not results:
