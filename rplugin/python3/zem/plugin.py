@@ -2,6 +2,7 @@ import neovim
 import re
 import pathlib
 import time
+import os
 from .db import DB
 from . import scanner
 
@@ -281,6 +282,7 @@ class Plugin(object):
         self.set_buffer_lines(lines)
 
     def update_index(self):
+        os.chdir(self.nvim.funcs.getcwd()) # switch to cwd of active buffer/tab, so relative paths are correct
         sources = []
         for source, param in self.setting("sources", [['files',{}],['tags',{}]]):
             func = getattr(scanner, source, None)
