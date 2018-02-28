@@ -80,7 +80,7 @@ class Plugin(object):
     def _edit(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.command_with_match(":edit ",m)
+            self.action_with_match(":edit ",m)
 
     @neovim.command("ZemTabEdit", nargs="1", sync=True)
     def _edit_tab(self, args):
@@ -100,23 +100,8 @@ class Plugin(object):
         self.candidates = []
         self._last_tokens = None
         self.count = self.setting("height", 20)
-        self.open_window()
+        default_text = " ".join(args)
 
-        self.nvim.funcs.inputsave()
-        try:
-            self.nvim.funcs.input({
-                'prompt':self.setting("prompt",'ZEM> '),
-                'highlight':'ZemOnKey',
-                'default':" ".join(args),
-            })
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.nvim.funcs.inputrestore()
-        self.close_window()
-
-    def open_window(self):
-        """Open the ZEM Window"""
         self.nvim.command("wincmd n")
         self.buffer = self.nvim.current.buffer
         self.buffer.name = "ZEM"
@@ -133,7 +118,22 @@ class Plugin(object):
         self.nvim.command("redraw")
         for k in self.SPECIAL_KEYS:
             self.nvim.command("cnoremap <buffer> {} {}".format(k,k.replace("<","<LT>"))) # Special keys just add a <key> sequence
-        self.set_buffer_lines_with_usage([])
+        if not default_text:
+            self.set_buffer_lines_with_usage([])
+
+        self.nvim.funcs.inputsave()
+        try:
+            self.nvim.funcs.input({
+                'prompt':self.setting("prompt",'ZEM> '),
+                'highlight':'ZemOnKey',
+                'default': default_text,
+            })
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.nvim.funcs.inputrestore()
+        self.close_window()
+
 
     @neovim.function("ZemOnKey",sync=True)
     def on_key(self, args):
@@ -152,7 +152,6 @@ class Plugin(object):
         if self.buffer.valid:
             try:
                 self.nvim.command("{}bd".format(self.buffer.number))
-                self.nvim.command("redraw")  # TODO: needed?
             except neovim.api.nvim.NvimError:
                 pass # already deleted
 
