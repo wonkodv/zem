@@ -55,7 +55,9 @@ class Plugin(object):
         if loc != ":memory:":
             loc = pathlib.Path(loc)
             if not loc.is_absolute():
-                    loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
+                # can not skip this because plugin has different cwd
+                loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
+            loc = loc.absolute()
             loc = str(loc)
         if loc == self._last_db_loc:
             return self._db
@@ -94,7 +96,6 @@ class Plugin(object):
     @neovim.command("Zem", nargs="?", sync=True)
     def _prompt(self, args):
         """Open the ZEM> Prompt."""
-        self.db = self.get_db()
         self.candidates = []
         self._last_tokens = None
         self.count = self.setting("height", 20)
@@ -276,7 +277,7 @@ class Plugin(object):
         self.nvim.command("redraw")
 
     def set_buffer_lines_with_usage(self, lines):
-        lines = USAGE.format(VERSION, self.db.location).split("\n")+[""] + lines
+        lines = USAGE.format(VERSION, self.get_db().location).split("\n")+[""] + lines
         self.set_buffer_lines(lines)
 
     def update_index(self):
@@ -292,12 +293,7 @@ class Plugin(object):
         for func, param in sources:
             data += func(param)
 
-        if self.db is None:
-            db = self.get_db()
-            db.fill(data)
-            db.close()
-        else:
-            self.db.fill(data)
+        self.get_db().fill(data)
         return len(data)
 
 def tokenize(text):
