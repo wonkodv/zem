@@ -74,7 +74,7 @@ class Plugin(object):
         t = time.perf_counter()
         l = self.update_index()
         t = time.perf_counter() - t
-        self.nvim.command("echomsg 'Scanned {} elements in {:.3f} seconds'".format(l,t))
+        self.nvim.out_write("echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(l,t))
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
     def _edit(self, args):
@@ -287,9 +287,9 @@ class Plugin(object):
             func = getattr(scanner, source, None)
             if not func:
                 func = self.nvim.funcs[func]
-            base_param = self.setting("source_{}".format(source), {})
+            base_param = self.setting("source_{}".format(source), {}).copy()
             base_param.update(param)
-            sources.append((func, param))
+            sources.append((func, base_param))
         data=[]
         for func, param in sources:
             data += func(param)
