@@ -103,19 +103,20 @@ def tags(settings):
     if not type_map:
         type_map = {
             'd':'Define',
-            'p':'Prototyp',
-            'x':'Prototyp',         # extern variable
-            't':'Type',             # typedef name
-            'e':'Type',             # enum name
-            'u':'Type',             # union name
-            's':'Type',             # struct name
-            'c':'Type',             # class name
-            'f':'Implementation',   # function impl
-            'v':'Implementation',   # variable
-            'l':'Implementation',   # label
-            'm':'Implementation',   # member
-            'e':'Define',           # enum value
+            'p':'Prototype',
+            'x':'ProtoExtern',  #  extern    variable
+            't':'TypeDef',      #  typedef   name
+            'e':'TypeEnum',     #  enum      name
+            'u':'TypeUnion',    #  union     name
+            's':'TypStructe',   #  struct    name
+            'c':'TypeClass',    #  class     name
+            'f':'ImpFunction',  #  function  impl
+            'v':'ImpVar',       #  variable
+            'l':'ImpLabel',     #  label
+            'm':'ImpMember',    #  member
+            'e':'DefEnum',      #  enum      value
             'F':'File',
+            'I':'UseFile',
         }
     result = []
 
@@ -135,7 +136,7 @@ def tags(settings):
             for field in parts[3:]:
                 if not ':' in field:
                     typ = field
-                    typ = type_map.get(typ, typ+'-tagkind')
+                    typ = type_map.get(typ, "X-"+typ)
             result.append((match, typ, file, location))
     print("scanned {} tags from {}".format(len(result),tag_file))
     return result

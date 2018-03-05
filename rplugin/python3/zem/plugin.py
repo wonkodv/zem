@@ -208,8 +208,8 @@ class Plugin(object):
             self.set_buffer_lines([
                 "== No Matches ==",
                 "Maybe update the Database with <C-U>?",
-                "words: {}".format(t[0]),
-                "types: {}".format(t[1])]
+                "words: {}".format(matches),
+                "types: {}".format(types)]
             )
         else:
             markup = self.setting("markup","{match:30s}\t{type:15}\t{file}:{location}")
@@ -257,6 +257,7 @@ class Plugin(object):
             if l[-1] == l[0] == '/':
                 l = l[1:-1]
                 l = r"/\M{}/".format(l) # use  nomagic mode, where only ^ $ / and \ are special
+                l = l.replace(match['match'],"\\zs"+match['match']) # search for identifier, nt start of line (not supported by nvim yet)
                 l = l.replace("\\","\\\\").replace(" ","\\ ") # replace space, double no of escapes
             l = "+" + l
         else:
