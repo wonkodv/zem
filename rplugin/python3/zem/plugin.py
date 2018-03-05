@@ -38,6 +38,7 @@ class Plugin(object):
         self.nvim = nvim
         self._db = None
         self._last_db_loc = None
+        self.buffer = None
 
     def on_error(self):
         import traceback
@@ -80,19 +81,19 @@ class Plugin(object):
     def _edit(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.action_with_match(":edit ",m)
+            self.action_with_match(":edit ",m[0])
 
     @neovim.command("ZemTabEdit", nargs="1", sync=True)
     def _edit_tab(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.command_with_match(":tabedit ",m)
+            self.action_with_match(":tabedit ",m[0])
 
     @neovim.command("ZemPreviewEdit", nargs="1", sync=True)
     def _edit_prev(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.command_with_match(":pedit ",m)
+            self.action_with_match(":pedit ",m[0])
 
     @neovim.command("Zem", nargs="?", sync=True)
     def _prompt(self, args):
@@ -149,11 +150,9 @@ class Plugin(object):
 
     def close_window(self):
         """Try closing the ZEM Window."""
-        if self.buffer.valid:
-            try:
-                self.nvim.command("{}bd".format(self.buffer.number))
-            except neovim.api.nvim.NvimError:
-                pass # already deleted
+        if self.buffer:
+            self.nvim.command("{}bd".format(self.buffer.number))
+            self.buffer = None
 
     def process(self, text):
         """Update the list of matches and process Special Keys.
@@ -242,8 +241,8 @@ class Plugin(object):
             except (AttributeError, IndexError):
                 self.set_buffer_lines(["No match"])
                 return
-            self.nvim.input("<ESC>")            # finish the input() prompt
             self.close_window()                 # destroy the zem window
+            self.nvim.input("<ESC>")            # finish the input() prompt
             self.action_with_match(action, m)
             return False
         else:
