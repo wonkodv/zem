@@ -282,17 +282,16 @@ class Plugin(object):
 
     def update_index(self):
         os.chdir(self.nvim.funcs.getcwd()) # switch to cwd of active buffer/tab, so relative paths are correct
-        sources = []
+        data=[]
         for source, param in self.setting("sources", [['files',{}],['tags',{}]]):
-            func = getattr(scanner, source, None)
-            if not func:
-                func = self.nvim.funcs[func]
             base_param = self.setting("source_{}".format(source), {}).copy()
             base_param.update(param)
-            sources.append((func, base_param))
-        data=[]
-        for func, param in sources:
-            data += func(param)
+
+            func = getattr(scanner, source, None)
+            if func:
+                data += func(base_param)
+            else:
+                data += self.nvim.call(source, param)
 
         self.get_db().fill(data)
         return len(data)
