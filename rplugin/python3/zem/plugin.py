@@ -37,7 +37,6 @@ class Plugin(object):
     def __init__(self, nvim):
         self.nvim = nvim
         self._db = None
-        self._last_db_loc = None
         self.buffer = None
 
     def on_error(self):
@@ -61,16 +60,15 @@ class Plugin(object):
                 loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
             loc = loc.absolute()
             loc = str(loc)
-        if loc == self._last_db_loc:
-            return self._db
         if self._db is not None:
+            if loc == self._db.location:
+                return self._db
             self._db.close()
         self._db = DB(loc)
-        self._last_db_loc = loc
         return self._db
 
     @neovim.command("ZemUpdateIndex", sync=True)
-    def _update_index(self, *args):
+    def zem_update_index(self, *args):
         """Fill the database."""
         t = time.perf_counter()
         l = self.update_index()
@@ -78,25 +76,25 @@ class Plugin(object):
         self.nvim.out_write("echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(l,t))
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
-    def _edit(self, args):
+    def zem_edit(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.action_with_match(":edit ",m[0])
+            self.action_with_match(":edit {command} {file}", m[0])
 
     @neovim.command("ZemTabEdit", nargs="1", sync=True)
-    def _edit_tab(self, args):
+    def zem_edit_tab(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.action_with_match(":tabedit ",m[0])
+            self.action_with_match(":tabedit {command} {file}", m[0])
 
     @neovim.command("ZemPreviewEdit", nargs="1", sync=True)
-    def _edit_prev(self, args):
+    def zem_edit_prev(self, args):
         m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
         if m:
-            self.action_with_match(":pedit ",m[0])
+            self.action_with_match(":pedit {command} {file}", m[0])
 
     @neovim.command("Zem", nargs="?", sync=True)
-    def _prompt(self, args):
+    def zem_prompt(self, args):
         """Open the ZEM> Prompt."""
         self.candidates = []
         self._last_tokens = None
@@ -137,7 +135,7 @@ class Plugin(object):
 
 
     @neovim.function("ZemOnKey",sync=True)
-    def on_key(self, args):
+    def zem_on_key(self, args):
         """This is the `highlight` argument of `input()` and is called on every key.
 
         args is `[ inputText ]`
@@ -194,10 +192,10 @@ class Plugin(object):
         t = tokenize(text)
         if t == self._last_tokens:  # only query the db if anything changed
             return
+        self._last_tokens = t
         if not any(t):
             self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
             return
-        self._last_tokens = t
         matches, types = t
         if not types:
             types = self.setting("default_types",[])
@@ -219,7 +217,6 @@ class Plugin(object):
         """Perform the action caused by special keys.
 
         Returns True if the ZEM Prompt is still open"""
-        self.nvim.vars['zem_last_action'] = action
         if action == 'up':
             self.nvim.command("normal k")
             self.nvim.command("redraw")
@@ -263,7 +260,7 @@ class Plugin(object):
         else:
             l = ""
         cmd = action.format(command=l, file=match['file'])
-        self.nvim.vars['zem_last_command'] = cmd
+        self.nvim.vars['zem_match'] = dict(match)
         try:
             self.nvim.command(cmd)
             self.nvim.command("nohlsearch|redraw")
