@@ -1,6 +1,7 @@
 import pathlib
 import re
 import subprocess
+import io
 
 def translate(patterns):
     l = []
@@ -71,14 +72,47 @@ def files(settings={}):
     print("scanned {} files".format(len(result)))
     return result
 
+
+
+
+
+TAGS_DEFAULT_TYPE_MAP = {
+        'd':'Define',
+        'p':'Prototype',
+        'x':'ProtoExtern',  #  extern    variable
+        't':'TypeDef',      #  typedef   name
+        'e':'TypeEnum',     #  enum      name
+        'u':'TypeUnion',    #  union     name
+        's':'TypStructe',   #  struct    name
+        'c':'TypeClass',    #  class     name
+        'f':'ImpFunction',  #  function  impl
+        'v':'ImpVar',       #  variable
+        'l':'ImpLabel',     #  label
+        'm':'ImpMember',    #  member
+        'e':'DefEnum',      #  enum      value
+        'F':'File',
+        'I':'UseFile',
+        }
+
 def tags(settings):
     tag_file = settings.get("file")
     type_map  = settings.get('type_map')
     tag_command = settings.get("command")
-    if not tag_file:
-        if tag_command:
+    if tag_command:
+        if tag_file:
+            raise TypeError("Both command and file defined")
+    else:
+        if pathlib.Path("tags").exists():
+            tag_file = "tags"
+        elif pathlib.Path(".tags").exists():
             tag_file = ".tags"
-            tag_command += " -f " + tag_file
+        else:
+            return []
+
+    if not type_map:
+        type_map = TAGS_DEFAULT_TYPE_MAP
+
+    if tag_command:
             p = subprocess.Popen(
                     tag_command,
                     stdin = subprocess.PIPE,
@@ -86,43 +120,15 @@ def tags(settings):
                     stderr = subprocess.PIPE,
             )
             print("running "+tag_command)
-            out, err = p.communicate()
-            if p.returncode != 0:
-                raise OSError("Non Zero returncode", p.returncode, tag_command, out, err)
-            print(out)
-        if pathlib.Path("tags").exists():
-            tag_file = "tags"
-        elif pathlib.Path(".tags").exists():
-            tag_file = ".tags"
-        else:
-            return []
+            f = p.stdout
     else:
-        if tag_command is not None:
-            raise TypeError("Both command and file defined")
+        tag_file = pathlib.Path(tag_file)
+        f = tag_file.open("rb")
 
-    if not type_map:
-        type_map = {
-            'd':'Define',
-            'p':'Prototype',
-            'x':'ProtoExtern',  #  extern    variable
-            't':'TypeDef',      #  typedef   name
-            'e':'TypeEnum',     #  enum      name
-            'u':'TypeUnion',    #  union     name
-            's':'TypStructe',   #  struct    name
-            'c':'TypeClass',    #  class     name
-            'f':'ImpFunction',  #  function  impl
-            'v':'ImpVar',       #  variable
-            'l':'ImpLabel',     #  label
-            'm':'ImpMember',    #  member
-            'e':'DefEnum',      #  enum      value
-            'F':'File',
-            'I':'UseFile',
-        }
+    f = io.TextIOWrapper(f, errors="replace")
+
     result = []
-
-    tag_file = pathlib.Path(tag_file)
-
-    with tag_file.open("rt", errors="replace") as f:
+    with f:
         for line in f:
             if line.startswith("!"):
                 continue
@@ -132,11 +138,19 @@ def tags(settings):
             location = parts[2]
             if location[-2:] == ';"':
                 location = location[:-2]
+            location = location.strip()
             typ = ""
             for field in parts[3:]:
                 if not ':' in field:
                     typ = field
                     typ = type_map.get(typ, "X-"+typ)
             result.append((match, typ, file, location))
+
+    if tag_command:
+        err = p.stderr.read().decode(errors="replace")
+        if p.wait(timeout=0.1) != 0:
+            raise OSError("Non Zero returncode", p.returncode, tag_command, err)
+        print(err)
+
     print("scanned {} tags from {}".format(len(result),tag_file))
     return result
