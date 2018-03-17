@@ -253,7 +253,7 @@ class Plugin(object):
         if l:
             if l[-1] == l[0] == '/':
                 l = l[1:-1]
-                l = r"/\M{}/".format(l) # use  nomagic mode, where only ^ $ / and \ are special
+                l = r"/\M{}".format(l) # use  nomagic mode, where only ^ $ / and \ are special
                 l = l.replace(match['match'],"\\zs"+match['match']) # search for identifier, nt start of line (not supported by nvim yet)
                 l = l.replace("\\","\\\\").replace(" ","\\ ") # replace space, double no of escapes
             l = "+" + l
