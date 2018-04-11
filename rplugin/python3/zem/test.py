@@ -1,70 +1,68 @@
 import unittest
 import os.path
 
-from .plugin import tokenize
+from .query import tokenize
 from .db import DB
 from .scanner import *
 
 class TokenizeTest(unittest.TestCase):
     def test_tokenize_empty(self):
-        m,t = tokenize(" ")
-        assert m == []
+        t = tokenize(" ")
         assert t == []
 
     def test_tokenize_simple(self):
-        m,t = tokenize("  aBC =File HJ =Def")
-        assert m == ["aBC","HJ"]
-        assert t == ["File","Def"]
+        t = tokenize("  aBC =File .ext =Def :opt")
+        assert t == [
+                ("match","aBC"),
+                ("type","File"),
+                ("extra","ext"),
+                ("type","Def"),
+                ("option","opt"),
+            ]
 
     def test_tokenize_unfinished_type(self):
-        m,t = tokenize("  aBC =")
-        assert m == ["aBC"]
-        assert t == []
+        t = tokenize("  aBC =")
+        assert t == [("match","aBC")]
 
 
 class DBTest(unittest.TestCase):
     def setUp(self):
         self.db = DB(":memory:")
         self.db.fill([
-            ["file.a","File","file.a",None],
-            ["file.b","File","file.b",None],
-            ["CONST_A","Define","file.a","/^#define CONST_A/"],
-            ["CONST_B","Define","file.B",10],
+            # match     type        file    extra       location        prio
+            ["file.a",   "File",    "file.a",  "",    None          ,   10 ],
+            ["file.b",   "File",    "file.b",  "",    None          ,   10 ],
+            ["CONST_A",  "Define",  "file.a",  "str", "/^CONST_A=/" ,   20 ],
+            ["CONST_B",  "Define",  "file.B",  "int", 10            ,   20 ],
         ])
 
     def test_getmatches_simple(self):
-        m = self.db.get(*tokenize("fla"))
+        m = self.db.get(tokenize("fla"))
         assert len(m) == 1
         m = m[0]['match']
         self.assertEqual("file.a", m)
 
     def test_getmatches_type(self):
-        m = self.db.get(*tokenize("=De"))
+        m = self.db.get(tokenize("=De"))
         assert len(m) == 2
         assert all(r[1] == "Define" for r in m)
 
     def test_getmatches_simple(self):
-        m = self.db.get(*tokenize("con =Fi"))
+        m = self.db.get(tokenize("con =Fi"))
         assert len(m) == 0
 
-    def test_scanFill(self):
-        data = ["test.py","File","test.py","123"]
-        self.db.fill([data])
-        m = self.db.get(*tokenize("tst.y"))
-        assert list(m[0]) == data
-
     def test_order(self):
+        "Test, that matches are sorted by decreasing mathc-length, then by prio"
         data = [
-                [ "order_2", "A", "",""],
-                [ "order_1", "B", "",""],
+                # match     type        file    extra       location        prio
+                [ "order_2", "typ", "file",     "extra",    "loc",          2],
+                [ "order_1", "typ", "file",     "extra",    "loc",          1],
+                [ "order_3", "typ", "file",     "extra",    "loc",          3],
+                [ "order_4_", "typ", "file",     "extra",    "loc",         4],
             ]
         self.db.fill(data)
-        m = self.db.get(*tokenize("order"))
-        assert [r[0] for r in m] == ["order_1", "order_2"]
-        m = self.db.get(*tokenize("=A =B order"))
-        assert [r[0] for r in m] == ["order_2", "order_1"]
-        m = self.db.get(*tokenize("=B =A order"))
-        assert [r[0] for r in m] == ["order_1", "order_2"]
+        m = self.db.get(tokenize("order"))
+        assert [r[0] for r in m] == ["order_3", "order_2", "order_1", "order_4_"]
 
 class ScanTest(unittest.TestCase):
     def test_translate(self):

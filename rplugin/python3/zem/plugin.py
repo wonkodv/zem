@@ -5,6 +5,9 @@ import time
 import os
 from .db import DB
 from . import scanner
+from pathlib import Path
+
+from .query import tokenize
 
 VERSION = '0.1'
 
@@ -77,19 +80,25 @@ class Plugin(object):
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
     def zem_edit(self, args):
-        m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
+        assert len(args) == 1
+        arg = args[0]
+        m = self.get_db().get(tokenize(arg), limit=1)
         if m:
             self.action_with_match(":edit {command} {file}", m[0])
 
     @neovim.command("ZemTabEdit", nargs="1", sync=True)
     def zem_edit_tab(self, args):
-        m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
+        assert len(args) == 1
+        arg = args[0]
+        m = self.get_db().get(tokenize(arg), limit=1)
         if m:
             self.action_with_match(":tabedit {command} {file}", m[0])
 
     @neovim.command("ZemPreviewEdit", nargs="1", sync=True)
     def zem_edit_prev(self, args):
-        m = self.get_db().get(*tokenize(" ".join(args)), limit=1)
+        assert len(args) == 1
+        arg = args[0]
+        m = self.get_db().get(tokenize(arg), limit=1)
         if m:
             self.action_with_match(":pedit {command} {file}", m[0])
 
@@ -189,29 +198,29 @@ class Plugin(object):
 
     def update_preview(self, text):
         """Updatet the matches in the preview window."""
-        t = tokenize(text)
-        if t == self._last_tokens:  # only query the db if anything changed
+        tokens = tokenize(text)
+        if tokens == self._last_tokens:  # only query the db if anything changed
             return
-        self._last_tokens = t
-        if not any(t):
+        self._last_tokens = tokens
+        if not any(tokens):
             self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
             return
-        matches, types = t
-        if not types:
-            types = self.setting("default_types",[])
-        results = self.get_db().get(matches, types, limit=self.count)
+        results = self.get_db().get(tokens, limit=self.count)
         results = list(reversed(results))
         self.candidates = results
         if not results:
             self.set_buffer_lines([
                 "== No Matches ==",
                 "Maybe update the Database with <C-U>?",
-                "words: {}".format(matches),
-                "types: {}".format(types)]
-            )
+                "tokens: {}".format(tokens),
+            ])
         else:
-            markup = self.setting("markup","{match:30s}\t{type:15}\t{file}:{location}")
-            self.set_buffer_lines([ markup.format(**r) for r in results])
+            def mkup(row):
+                fn = Path(row['file']).name
+                loc = row['location'][:20]
+                return "{row[match]:25s} {row[type]:15} {fn:20}:{loc:20} {row[extra]}".format(row=row, loc=loc, fn=fn)
+            markup = self.setting("markup", mkup)
+            self.set_buffer_lines([ markup(r) for r in results])
 
     def action(self, action):
         """Perform the action caused by special keys.
@@ -292,17 +301,3 @@ class Plugin(object):
 
         self.get_db().fill(data)
         return len(data)
-
-def tokenize(text):
-    matches = []
-    types   = []
-    for p in text.split():
-        if not p:
-            continue
-        if p[0] == "=":
-            if len(p) > 1:
-                types.append(p[1:])
-        else:
-            matches.append(p)
-    return matches, types
-
