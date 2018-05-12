@@ -52,7 +52,10 @@ class Plugin(object):
         with open(".zem.errors","at") as f:
             f.write(lines)
         lines = lines.split("\n")
-        self.set_buffer_lines(lines)
+        try:
+            self.set_buffer_lines(lines)
+        except TypeError:
+            pass
 
     def setting(self, key, default):
         return self.nvim.vars.get("zem_{}".format(key), default)
@@ -302,6 +305,7 @@ class Plugin(object):
             l = ""
         cmd = "{} {} {}".format(command, l, match['file'])
         try:
+            self.nvim.vars['zem_command'] = cmd
             self.cmd(cmd)
             self.cmd("nohlsearch")
         except neovim.api.nvim.NvimError:
