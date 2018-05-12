@@ -7,7 +7,7 @@ class DB:
         DROP TABLE IF EXISTS zem;
 
         CREATE TABLE zem (
-            match       TEXT NOT NULL,
+            name        TEXT NOT NULL,
             type        TEXT NOT NULL,
             file        TEXT NOT NULL,
             extra       TEXT,
@@ -16,7 +16,7 @@ class DB:
         );
         CREATE INDEX zem_type ON zem(type);
         """
-    _COLUMNS = ['match', 'type', 'file', 'extra', 'location', 'prio']
+    _COLUMNS = ['name', 'type', 'file', 'extra', 'location', 'prio']
 
     def __init__(self, location):
         self.location = location
@@ -39,7 +39,7 @@ class DB:
     def fill(self, data):
         with self.con as con:
             con.execute("DELETE FROM zem");
-            con.executemany("INSERT INTO zem (match, type, file, extra, location, prio) VALUES (?,?,?,?,?,?)", data)
+            con.executemany("INSERT INTO zem (name , type, file, extra, location, prio) VALUES (?,?,?,?,?,?)", data)
             con.commit()
         con.execute("ANALYZE zem")
 
@@ -53,9 +53,9 @@ class DB:
             WHERE
                 {}
             ORDER BY
-                length(match) ASC,
+                length(name ) ASC,
                 prio DESC,
-                match ASC
+                name  ASC
             """.format(where)
         if limit:
             q+="""

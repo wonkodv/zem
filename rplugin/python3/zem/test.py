@@ -11,9 +11,9 @@ class TokenizeTest(unittest.TestCase):
         assert t == []
 
     def test_tokenize_simple(self):
-        t = tokenize("  aBC =File .ext =Def :opt")
+        t = tokenize("  aBC =File :ext =Def -opt")
         assert t == [
-                ("match","aBC"),
+                ("name","aBC"),
                 ("type","File"),
                 ("extra","ext"),
                 ("type","Def"),
@@ -22,14 +22,14 @@ class TokenizeTest(unittest.TestCase):
 
     def test_tokenize_unfinished_type(self):
         t = tokenize("  aBC =")
-        assert t == [("match","aBC")]
+        assert t == [("name","aBC")]
 
 
 class DBTest(unittest.TestCase):
     def setUp(self):
         self.db = DB(":memory:")
         self.db.fill([
-            # match     type        file    extra       location        prio
+            # name     type        file    extra       location        prio
             ["file.a",   "File",    "file.a",  "",    None          ,   10 ],
             ["file.b",   "File",    "file.b",  "",    None          ,   10 ],
             ["CONST_A",  "Define",  "file.a",  "str", "/^CONST_A=/" ,   20 ],
@@ -39,7 +39,7 @@ class DBTest(unittest.TestCase):
     def test_getmatches_simple(self):
         m = self.db.get(tokenize("fla"))
         assert len(m) == 1
-        m = m[0]['match']
+        m = m[0]['name']
         self.assertEqual("file.a", m)
 
     def test_getmatches_type(self):
@@ -54,7 +54,7 @@ class DBTest(unittest.TestCase):
     def test_order(self):
         "Test, that matches are sorted by decreasing mathc-length, then by prio"
         data = [
-                # match     type        file    extra       location        prio
+                # name     type        file    extra       location        prio
                 [ "order_2", "typ", "file",     "extra",    "loc",          2],
                 [ "order_1", "typ", "file",     "extra",    "loc",          1],
                 [ "order_3", "typ", "file",     "extra",    "loc",          3],

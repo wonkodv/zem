@@ -2,9 +2,9 @@
 TOKEN_TYPES = {
     'type':  ['=',  'prefix', 'type',   'or'  ],
     'file':  ['/',  'fuzzy',  'file',   'and' ],
-    'option':[':',  'ignore', 'option', None  ],
-    'extra': ['.',  'fuzzy',  'extra',  'and' ],
-    'match': ['',   'fuzzy',  'match',  'and' ],
+    'option':['-',  'ignore', 'option', None  ],
+    'extra': [':',  'fuzzy',  'extra',  'and' ],
+    'name': ['',   'fuzzy',  'name',  'and' ],
 }
 
 def tokenize(text):

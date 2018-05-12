@@ -65,11 +65,11 @@ def files(settings={}):
     location = None
     for p,s in paths:
         if fullpath:
-            match = s
+            name = s
         else:
-            match = p.name
+            name = p.name
         file = s
-        result.append((match, typ, file, None, location, prio))
+        result.append((name, typ, file, None, location, prio))
     print("scanned {} files".format(len(result)))
     return result
 
@@ -135,7 +135,7 @@ def tags(settings):
             if line.startswith("!"):
                 continue
             parts = line.strip().split("\t")
-            match = parts[0]
+            name = parts[0]
             file  = parts[1]
             location = parts[2]
             if location[-2:] == ';"':
@@ -154,7 +154,7 @@ def tags(settings):
                         extra = extra + field + " "
             if typ:
                 typ, prio = types.get(typ, ("X-"+typ, 0))
-            result.append((match, typ, file, extra, location, prio))
+            result.append((name, typ, file, extra, location, prio))
 
     if tag_command:
         if not tag_file:
