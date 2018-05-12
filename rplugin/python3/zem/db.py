@@ -36,6 +36,10 @@ class DB:
             with self.con as c:
                 c.executescript(self._SCHEMA)
 
+    def get_size(self):
+        r = self.con.execute("SELECT COUNT(*) FROM zem;").fetchone()
+        return r[0]
+
     def fill(self, data):
         with self.con as con:
             con.execute("DELETE FROM zem");

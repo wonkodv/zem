@@ -9,21 +9,22 @@ from pathlib import Path
 
 from .query import tokenize
 
-VERSION = '0.1'
+VERSION = '0.2'
 
 USAGE = """== ZEM v{} ==
 Query Syntax:
-    WORD    match all characters of this word in order, not necessarily adjacent.
-            all entered WORDs must match, but in any order
-    =TYPE   match types that start with TYPE
-            must match any type, if multiple are entered
+    WORD    fuzzy match against Name
+    :WORD   fuzzy match against Extra (e.g. surronding class, ...)
+    /WORD   fuzzy match against Path
+    =WORD   prefix match against types
+            Multiple Types enlarge the ResultSet
 Special Keys:
     <ESC>       Stop ZEM, don't change location
     <UP> <DOWN> Change selected match
     <CR>        Open the selected match
-    <TAB>       Open the selected match in a new tab
+    <TAB> <C-P> Open the selected match in a new tab / PreviewWindow
     <C-U>       ReBuild the Database
-Using DataBase {} """
+Using DataBase {} ({} Rows)"""
 
 
 @neovim.plugin
@@ -32,9 +33,12 @@ class Plugin(object):
             "<up>"  :"up",
             "<down>":"down",
             "<c-u>" :"update",
-            "<cr>"  :":edit {command} {file}",
-            "<tab>" :":tabedit {command} {file}",
-            "<c-p>" :":pedit {command} {file}",
+    }
+    REMAPED_KEYS = {
+            "<tab>" :"<END> -tab  <CR>",
+            "<c-p>" :"<END> -prev <CR>",
+            "<c-j>" :"<DOWN>",
+            "<c-k>" :"<UP>",
     }
 
     def __init__(self, nvim):
@@ -52,6 +56,12 @@ class Plugin(object):
 
     def setting(self, key, default):
         return self.nvim.vars.get("zem_{}".format(key), default)
+
+    def cmd(self, cmd):
+        #with open(".zemcommands","at") as f:
+        #    f.write(cmd)
+        #    f.write("\n")
+        self.nvim.command(cmd)
 
     def get_db(self):
         """Lazy get db handle for current cwd/g:zem_db."""
@@ -84,7 +94,7 @@ class Plugin(object):
         arg = args[0]
         m = self.get_db().get(tokenize(arg), limit=1)
         if m:
-            self.action_with_match(":edit {command} {file}", m[0])
+            self.command_with_match("edit", m[0])
 
     @neovim.command("ZemTabEdit", nargs="1", sync=True)
     def zem_edit_tab(self, args):
@@ -92,7 +102,7 @@ class Plugin(object):
         arg = args[0]
         m = self.get_db().get(tokenize(arg), limit=1)
         if m:
-            self.action_with_match(":tabedit {command} {file}", m[0])
+            self.command_with_match("tabedit", m[0])
 
     @neovim.command("ZemPreviewEdit", nargs="1", sync=True)
     def zem_edit_prev(self, args):
@@ -100,7 +110,7 @@ class Plugin(object):
         arg = args[0]
         m = self.get_db().get(tokenize(arg), limit=1)
         if m:
-            self.action_with_match(":pedit {command} {file}", m[0])
+            self.command_with_match("pedit", m[0])
 
     @neovim.command("Zem", nargs="?", sync=True)
     def zem_prompt(self, args):
@@ -110,37 +120,63 @@ class Plugin(object):
         self.count = self.setting("height", 20)
         default_text = " ".join(args)
 
-        self.nvim.command("wincmd n")
+        previous_window = self.nvim.current.window
+
+        self.cmd("wincmd n")
         self.buffer = self.nvim.current.buffer
         self.buffer.name = "ZEM"
-        self.nvim.command("setlocal filetype=zem_preview")
-        self.nvim.command("setlocal winminheight=1")
-        self.nvim.command("setlocal buftype=nofile")
-        self.nvim.command("setlocal bufhidden=delete")
-        self.nvim.command("setlocal noswapfile")
-        self.nvim.command("setlocal nobuflisted")
-        self.nvim.command("setlocal nowrap")
-        self.nvim.command("setlocal nonumber")
-        self.nvim.command("setlocal nolist")
-        self.nvim.command("wincmd J")
-        self.nvim.command("redraw")
+        self.cmd("setlocal filetype=zem_preview")
+        self.cmd("setlocal winminheight=1")
+        self.cmd("setlocal buftype=nofile")
+        #self.cmd("setlocal bufhidden=delete")
+        self.cmd("setlocal noswapfile")
+        #self.cmd("setlocal nobuflisted")
+        self.cmd("setlocal nowrap")
+        self.cmd("setlocal nonumber")
+        self.cmd("setlocal nolist")
+        self.cmd("wincmd J")
+        self.cmd("redraw")
+        for k,r in self.REMAPED_KEYS.items():
+            self.cmd("cnoremap <buffer> {} {}".format(k,r))
         for k in self.SPECIAL_KEYS:
-            self.nvim.command("cnoremap <buffer> {} {}".format(k,k.replace("<","<LT>"))) # Special keys just add a <key> sequence
+            self.cmd("cnoremap <buffer> {} {}".format(k,k.replace("<","<LT>"))) # Special keys just add a <key> sequence
         if not default_text:
             self.set_buffer_lines_with_usage([])
 
+        match = None
         self.nvim.funcs.inputsave()
         try:
-            self.nvim.funcs.input({
+            text = self.nvim.funcs.input({
                 'prompt':self.setting("prompt",'ZEM> '),
                 'highlight':'ZemOnKey',
                 'default': default_text,
             })
         except KeyboardInterrupt:
-            pass
-        finally:
-            self.nvim.funcs.inputrestore()
-        self.close_window()
+            text = None
+        self.nvim.funcs.inputrestore()
+
+        if text:
+            line = self.nvim.funcs.line('.')
+            idx = line - 1
+            try:
+                match = self.candidates[idx]
+            except (AttributeError, IndexError):
+                pass
+            else:
+                cmd = "edit"
+                for t,v in self._last_tokens:
+                    if t == 'option':
+                        if v == 'tab':
+                            cmd = "tabedit"
+                        elif v == 'prev':
+                            cmd = "pedit"
+                        else:
+                            raise ValueError("Unknown Option ", v)
+        self.close_zem_buffer()
+        self.nvim.current.window = previous_window
+        self.cmd("redraw")
+        if match:
+            self.command_with_match(cmd, match)
 
 
     @neovim.function("ZemOnKey",sync=True)
@@ -152,14 +188,16 @@ class Plugin(object):
         return a list of highlight options for the input string
         """
         text, = args
-        self.nvim.async_call(self.process, text)
+        #self.nvim.async_call(self.process, text)
+        # TODO: Make async, needs synchronisation when mappings are invoked
+        # -prev <CR> triggers async call to process, input closes, process is called, clash
+        self.process(text)
         return []
 
-    def close_window(self):
-        """Try closing the ZEM Window."""
-        if self.buffer:
-            self.nvim.command("{}bd".format(self.buffer.number))
-            self.buffer = None
+    def close_zem_buffer(self):
+        """Close the ZEM Window."""
+        self.cmd("{}bd".format(self.buffer.number))
+        self.buffer = None
 
     def process(self, text):
         """Update the list of matches and process Special Keys.
@@ -184,8 +222,8 @@ class Plugin(object):
                 if '>' in text:
                     for key, action in self.SPECIAL_KEYS.items():
                         if key in text:
-                            if self.action(action):
-                                self.nvim.input("<BS>"*(len(key))) # remove <key>
+                            self.nvim.input("<BS>"*(len(key))) # remove <key>
+                            self.action(action)
                             break
                     else:
                         raise ValueError("unknown special key", text)
@@ -216,9 +254,18 @@ class Plugin(object):
             ])
         else:
             def mkup(row):
-                fn = Path(row['file']).name
-                loc = row['location'][:20]
-                return "{row[match]:25s} {row[type]:15} {fn:20}:{loc:20} {row[extra]}".format(row=row, loc=loc, fn=fn)
+                fn = row['file'][-30:]
+                loc = row['location']
+                if loc:
+                    loc = ":"+loc[:20]
+                else:
+                    loc = ""
+                extra = row['extra']
+                if extra:
+                    pass
+                else:
+                    extra = ""
+                return "{row[name]:35s} {row[type]:15} {fn:>30}{loc:20} {extra}".format(row=row, loc=loc, extra=extra, fn=fn)
             markup = self.setting("markup", mkup)
             self.set_buffer_lines([ markup(r) for r in results])
 
@@ -227,63 +274,52 @@ class Plugin(object):
 
         Returns True if the ZEM Prompt is still open"""
         if action == 'up':
-            self.nvim.command("normal k")
-            self.nvim.command("redraw")
+            self.cmd("normal k")
+            self.cmd("redraw")
         elif action == 'down':
-            self.nvim.command("normal j")
-            self.nvim.command("redraw")
+            self.cmd("normal j")
+            self.cmd("redraw")
         elif action == 'update':
             self.set_buffer_lines(["Updating..."])
             t = time.perf_counter()
             l = self.update_index()
             t = time.perf_counter() - t
             self.set_buffer_lines(["Scanned {} elements in {:.3f} seconds".format(l,t)])
-            self._last_tokens = None # allow update after the BS are sent
-        elif action[0] == ":":
-            line = self.nvim.funcs.line('.')
-            idx = line - 1
-            try:
-                m = self.candidates[idx]
-            except (AttributeError, IndexError):
-                self.set_buffer_lines(["No match"])
-                return
-            self.close_window()                 # destroy the zem window
-            self.nvim.input("<ESC>")            # finish the input() prompt
-            self.action_with_match(action, m)
-            return False
+            # TODO: ? self._last_tokens = None # allow update after the BS are sent
         else:
             raise ValueError("unknown action",action,key,text)
-        return True
 
-    def action_with_match(self, action, match):
-        assert action[0] == ':'
-        action = action[1:]
+    def command_with_match(self, command, match):
         l = match['location']
         if l:
             if l[-1] == l[0] == '/':
                 l = l[1:-1]
                 l = r"/\M{}".format(l) # use  nomagic mode, where only ^ $ / and \ are special
-                l = l.replace(match['match'],"\\zs"+match['match']) # search for identifier, nt start of line (not supported by nvim yet)
-                l = l.replace("\\","\\\\").replace(" ","\\ ") # replace space, double no of escapes
+                l = l.replace(match['name'],"\\zs"+match['name']) # search for identifier, not start of line (not supported by nvim yet)
+                l = l.replace("\\","\\\\").replace(" ","\\ ") # escape backslashes, then escape space
             l = "+" + l
         else:
             l = ""
-        cmd = action.format(command=l, file=match['file'])
-        self.nvim.vars['zem_match'] = dict(match)
+        cmd = "{} {} {}".format(command, l, match['file'])
         try:
-            self.nvim.command(cmd)
-            self.nvim.command("nohlsearch|redraw")
+            self.cmd(cmd)
+            self.cmd("nohlsearch")
         except neovim.api.nvim.NvimError:
             pass # something like ATTENTION, swapfile or so..
 
     def set_buffer_lines(self, lines):
+        if not self.buffer:
+            raise TypeError("Setting buffer Lines when buffer is closed")
+        if not self.nvim.current.buffer == self.buffer:
+            raise TypeError("Setting buffer Lines but not in ZEM Buffer")
         self.buffer[:] = lines
-        self.nvim.command("{}wincmd _".format(len(lines)))
-        self.nvim.command("normal G")   # select first result
-        self.nvim.command("redraw")
+        self.cmd("{}wincmd _".format(len(lines)))
+        self.cmd("normal G")   # select first result
+        self.cmd("redraw")
 
     def set_buffer_lines_with_usage(self, lines):
-        lines = USAGE.format(VERSION, self.get_db().location).split("\n")+[""] + lines
+        db = self.get_db()
+        lines = USAGE.format(VERSION, db.location, db.get_size()).split("\n")+[""] + lines
         self.set_buffer_lines(lines)
 
     def update_index(self):
