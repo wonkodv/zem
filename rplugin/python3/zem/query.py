@@ -7,7 +7,7 @@ TOKEN_TYPES = {
     'name': ['',   'fuzzy',  'name',  'and' ],
 }
 
-def tokenize(text):
+def tokenize(text, *, ignore=[]):
     query = []
     for p in text.split():
         if not p:
@@ -16,7 +16,8 @@ def tokenize(text):
             l = len(prefix)
             if p.startswith(prefix):
                 if len(p) > l:
-                    query.append((typ, p[l:]))
+                    if typ not in ignore:
+                        query.append((typ, p[l:]))
                 break
     return query
 

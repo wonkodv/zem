@@ -167,7 +167,7 @@ class Plugin(object):
                 pass
             else:
                 cmd = "edit"
-                for t,v in self._last_tokens:
+                for t,v in tokenize(text):
                     if t == 'option':
                         if v == 'tab':
                             cmd = "tabedit"
@@ -239,7 +239,7 @@ class Plugin(object):
 
     def update_preview(self, text):
         """Updatet the matches in the preview window."""
-        tokens = tokenize(text)
+        tokens = tokenize(text, ignore=['option'])
         if tokens == self._last_tokens:  # only query the db if anything changed
             return
         self._last_tokens = tokens
