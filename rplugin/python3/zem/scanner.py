@@ -75,20 +75,20 @@ def files(settings={}):
 
 TAGS_DEFAULT_TYPE_MAP = {
         'd':('Define',      75 ),
-        'p':('Prototype',   70 ),
+        'p':('Prototype',   70 ), #  Function Prototype
         'x':('ProtoExtern', 70 ), #  extern    variable
-        't':('TypeDef',     80 ), #  typedef   name
-        'e':('TypeEnum',    75 ), #  enum      name
-        'u':('TypeUnion',   75 ), #  union     name
-        's':('TypStructe',  75 ), #  struct    name
-        'c':('TypeClass',   75 ), #  class     name
-        'f':('ImpFunction', 80 ), #  function  impl
+        't':('TypeDef',     80 ), #  typedef
+        'e':('TypeEnum',    75 ), #  enum
+        'u':('TypeUnion',   75 ), #  union
+        's':('TypeStruct',  75 ), #  struct
+        'c':('TypeClass',   75 ), #  class
+        'f':('ImpFunction', 80 ), #  function  implementation
         'v':('ImpVar',      80 ), #  variable
         'l':('ImpLabel',    85 ), #  label
         'm':('ImpMember',   80 ), #  member
         'e':('DefEnum',     75 ), #  enum      value
         'F':('File',        50 ),
-        'I':('UseFile',     45 ),
+        'I':('UseFile',     45 ), #  include
         }
 
 def tags(settings):
