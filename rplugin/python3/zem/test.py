@@ -65,47 +65,132 @@ class DBTest(unittest.TestCase):
         assert [r[0] for r in m] == ["order_3", "order_2", "order_1", "order_4_"]
 
 class ScanTest(unittest.TestCase):
-    def test_translate(self):
-        r = translate([".*", "*.pyc", "/test/**/*.py"])
-        assert r.match("foo/.bar")
-        assert r.match(".bar")
-        assert r.match("foo/bar.pyc")
-        assert r.match("foo.pyc")
-        assert r.match("test/foo.py")
-        assert r.match("test/foo.pyc")
-        assert r.match("test/foo/bar.py")
-        assert r.match("test/foo/bar/baz.py")
-
-        assert not r.match("foo.py")
-        assert not r.match("foo/bar.py")
-        assert not r.match("foo/bar.pyc.baz")
-        assert not r.match("foo/bar.pyc.baz")
-        assert not r.match("foo/test/bar.py")
-        assert not r.match("foo/test/bar/baz.py")
-
     def test_translate_wildir(self):
-        r = translate(["**/bar"])
-        assert r.match("foo/bar")
-        assert r.match("bar")
-        assert not r.match("foo")
-        assert not r.match("foo/foo")
+        r, d, n = translate(["**/bar"])[0]
+        assert not n
+        assert not d
+        assert     r.fullmatch("foo/bar")
+        assert     r.fullmatch("bar")
+        assert not r.fullmatch("foo")
+        assert not r.fullmatch("foo/foo")
 
     def test_translate_wildir_name(self):
-        r = translate(["**_test/"])
-        assert r.match("foo_test/")
-        assert r.match("_test/")
-        assert r.match("foo/bar_test/")
-        assert not r.match("foo_test.py")
+        r, d, n = translate(["**_test/"])[0]
+        assert not n
+        assert     d
+
+        assert     r.fullmatch("foo_test")
+        assert     r.fullmatch("_test")
+        assert     r.fullmatch("foo/bar_test")
+        assert not r.fullmatch("foo_test.py")
+
+    def test_translate_dir(self):
+        r, d, n = translate(["foo/"])[0]
+        assert not n
+        assert     d
+
+        assert     r.fullmatch("foo")
+        assert     r.fullmatch("bar/foo")
+        assert not r.fullmatch("bar/foo/")
+        assert not r.fullmatch("bar/foo/baz")
+
+    def test_translate_name(self):
+        r, d, n = translate(["foo"])[0]
+        assert not n
+        assert not d
+
+        assert not r.fullmatch("foobar")
+        assert not r.fullmatch("barfoo")
+        assert not r.fullmatch("foo/bar")
+        assert     r.fullmatch("foo")
+        assert     r.fullmatch("bar/foo")
+
+    def test_translate_root_name(self):
+        r, d, n = translate(["/foo"])[0]
+        assert not n
+        assert not d
+
+        assert not r.fullmatch("foobar")
+        assert not r.fullmatch("foo/bar")
+        assert     r.fullmatch("foo")
+        assert not r.fullmatch("bar/foo")
+
+    def test_translate_root_dir(self):
+        r, d, n = translate(["/foo/"])[0]
+        assert not n
+        assert     d
+
+        assert not r.fullmatch("foobar")
+        assert not r.fullmatch("foo/bar")
+        assert     r.fullmatch("foo")
+        assert not r.fullmatch("bar/foo")
+
+    def test_translate_paren(self):
+        r, d, n = translate(["foo"], parent="bar")[0]
+        assert not n
+        assert not d
+
+        assert not r.fullmatch("foobar")
+        assert not r.fullmatch("foo/bar")
+        assert not r.fullmatch("foo")
+        assert     r.fullmatch("bar/foo")
+        assert     r.fullmatch("bar/baz/foo")
+
+    def test_translate_parent_root(self):
+        r, d, n = translate(["/foo"], parent="bar")[0]
+        assert not n
+        assert not d
+
+        assert not r.fullmatch("foobar")
+        assert not r.fullmatch("foo/bar")
+        assert not r.fullmatch("foo")
+        assert     r.fullmatch("bar/foo")
+        assert not r.fullmatch("bar/baz/foo")
+
+    def test_translate_wildcard(self):
+        r, d, n = translate(["*"])[0]
+        assert not n
+        assert not d
+
+        assert     r.fullmatch("foobar")
+        assert     r.fullmatch("foo/bar")
+        assert     r.fullmatch("foo")
+        assert     r.fullmatch("bar/foo")
+        assert     r.fullmatch("bar/baz/foo")
+
+    def test_translate_wildcard_root(self):
+        r, d, n = translate(["/*"])[0]
+        assert not n
+        assert not d
+
+        assert     r.fullmatch("foobar")
+        assert not r.fullmatch("foo/bar")
+        assert     r.fullmatch("foo")
+        assert not r.fullmatch("bar/foo")
+        assert not r.fullmatch("bar/baz/foo")
+
+    def test_translate_wildcard_fn(self):
+        r, d, n = translate(["b*r"])[0]
+        assert not n
+        assert not d
+
+        assert not r.fullmatch("foobar")
+        assert     r.fullmatch("foo/bar")
+        assert not r.fullmatch("foo")
+        assert     r.fullmatch("bar")
+        assert not r.fullmatch("bar/baz/foo")
+        assert not r.fullmatch("b/a/r")
+
 
     def test_scanfiles(self):
         settings = {
-            "root":os.path.dirname(__file__),
-            "pattern":["**/*.*"],
-            "exclude":[],
+            "roots":os.path.dirname(__file__),
+            "exclude":["*.pyc"],
             'type':'File',
         }
         rows = files(settings)
 
         assert any(r[0].endswith('test.py') for r in rows)
+        assert not any(r[0].endswith('test.pyc') for r in rows)
 
 # cd .. && py -3 -m pytest zem/test.py

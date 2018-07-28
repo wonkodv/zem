@@ -3,74 +3,124 @@ import re
 import subprocess
 import io
 
-def translate(patterns):
-    l = []
-    for p in patterns:
+def translate(lines, parent=""):
+    result = []
+
+    if parent:
+        assert parent[0] != '/'
+        assert parent[-1] != '/'
+        parent = re.escape(parent) + "/"
+
+    for l in lines:
+        negate = False
+        only_dir = False
+        l = l.strip()
+        if not l:
+            continue
+        if l[0] == '#':         # comment
+            continue
+        if l[0] == '!':         # negated
+            negate = True
+            l = l[1:]
+
+        if l[0] == '\\':
+            l = l[1:]
+
+        if l[0] == '/':             # /a/b  -> parent/a/b
+            l = l[1:]
+        elif l[:1] == '**':         # **/a  -> parent/**/a
+            pass
+        else:                       # a/b   -> parent/**/a/b
+            l = '**/'+ l
+
+        if l[-1] == '/':            # only match dirs
+            l = l[:-1]
+            only_dir = True
+
+        r = [parent]
         i = 0
-        r = []
-        while i < len(p):
-            c = p[i]
+        while i < len(l):
+            c = l[i]
             if c == "*":
-                done = False
+                s = "[^/]*"
                 try:
-                    if p[i:i+3] == "**/":
+                    if l[i:i+3] == "**/":
                         i += 2
-                        r.append("(?:.*/)?")
-                        done = True
-                    elif p[i:i+2] == "**":
+                        s = "(?:.*/)?"
+                    elif l[i:i+2] == "**":
                         i += 1
-                        r.append(".*")
-                        done = True
+                        s = ".*"
                 except IndexError:
                     pass
-                if not done:
-                    r.append("[^/]*")
+                r.append(s)
             elif c == "?":
                 r.append("[^/]")
-            elif c == "/" and i == 0:
-                r.append("^")
-            elif c == "/" and i == (len(p) - 1):
-                r.append("/.*")
             else:
                 r.append(re.escape(c))
             i += 1
-        r = "".join(r)
-        l.append(r)
-    r = "|".join(l)
-    r = "^(?:.*/)?(?:" + r + ")$"
-    r = re.compile(r)
-    return r
+        r = re.compile("".join(r))
+        result.append((r, only_dir, negate))
+
+    return result
 
 def files(settings={}):
     """Index the directory Tree."""
-    root    = settings.get("root",    ".")
-    pattern = settings.get("pattern", ["**/*.*"])
+    root    = settings.get("root", ".")
+    fullpath= settings.get("matchpath", False)
+    typ     = settings.get("type",    "File")
+    prio    = settings.get("prio",    50)
+    exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     exclude = settings.get("exclude", [
         "*~",
         ".*/",
         "*.pyc",
         "*.o",
         "*.class",
+        "!*.map",
     ])
-    fullpath= settings.get("matchpath", False)
-    typ     = settings.get("type",    "File")
-    prio    = settings.get("prio",    50)
+
+    excludes = translate(exclude)
+    result = []
+
+    count = 0
 
     root = pathlib.Path(root)
-    paths = ( (p,p.as_posix()) for pat in pattern for p in root.glob(pat) )
-    if exclude:
-        exclude = translate(exclude)
-        paths = ( (p,s) for (p,s) in paths if not exclude.match(s) )
-    result = []
-    location = None
-    for p,s in paths:
-        if fullpath:
-            name = s
-        else:
-            name = p.name
-        file = s
-        result.append((name, typ, file, None, location, prio))
-    print("scanned {} files".format(len(result)))
+    def walk(d, exclude_stack):
+        nonlocal count
+        count += 1
+        if d.is_file():
+            rp = d.relative_to(root).as_posix()
+            if fullpath:
+                name = rp
+            else:
+                name = d.name
+            result.append((name, typ, rp, None, None, prio))
+            return
+        for f in exfiles:
+            p = d/f
+            if p.is_file():
+                with p.open("rt") as f:
+                    x = translate(f,d.relative_to(root).as_posix())
+                    exclude_stack = exclude_stack + x
+        for p in d.glob('*'):
+            s = p.relative_to(root).as_posix()
+            isdir = p.is_dir()
+            exclude = False
+            for r,d,n in reversed(exclude_stack):
+                if d and not isdir:
+                    continue
+                if r.match(s):
+                    if n:  # explicit include
+                        break
+                    else:
+                        exclude = True
+                        break
+            if not exclude:
+                walk(p, exclude_stack)             # implicit include
+
+    walk(root, excludes)
+
+    print("scanned {} locations, found {} files".format(count, len(result)))
     return result
 
 TAGS_DEFAULT_TYPE_MAP = {
