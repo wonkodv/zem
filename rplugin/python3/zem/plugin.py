@@ -287,8 +287,8 @@ class Plugin(object):
             t = time.perf_counter()
             l = self.update_index()
             t = time.perf_counter() - t
-            self.set_buffer_lines(["Scanned {} elements in {:.3f} seconds".format(l,t)])
-            # TODO: ? self._last_tokens = None # allow update after the BS are sent
+            self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(l,t)])
+            self._last_tokens = None # allow update after the BS are sent
         else:
             raise ValueError("unknown action",action,key,text)
 
