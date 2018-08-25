@@ -89,7 +89,7 @@ def files(settings={}):
         nonlocal count
         count += 1
         if d.is_file():
-            rp = d.relative_to(root).as_posix()
+            rp = d.as_posix()
             if fullpath:
                 name = rp
             else:
