@@ -197,6 +197,18 @@ class Plugin(object):
         self.process(text)
         return []
 
+    @neovim.function("ZemGetMatches", sync=True)
+    def zem_get_matches(self, args):
+        if not ( 1 <= len(args) <= 2):
+            raise TypeError("1 or 2 arguments expected")
+        q = args[0]
+        if len(args) == 2:
+            limit = args[1]
+        else:
+            limit = None
+        m = self.get_db().get(tokenize(q), limit=limit)
+        return [ dict(r) for r in m ]
+
     def close_zem_buffer(self):
         """Close the ZEM Window."""
         self.cmd("{}bd".format(self.buffer.number))
