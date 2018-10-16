@@ -1,10 +1,11 @@
 import neovim
-import re
 import pathlib
 import time
 import os
+import re
 from .db import DB
 from . import scanner
+from . import complete
 from pathlib import Path
 
 from .query import tokenize
@@ -83,7 +84,7 @@ class Plugin(object):
         self._db = DB(loc)
         return self._db
 
-    @neovim.command("ZemUpdateIndex", sync=True)
+    @neovim.command("ZemUpdateIndex", sync=False)
     def zem_update_index(self, *args):
         """Fill the database."""
         t = time.perf_counter()
@@ -123,9 +124,10 @@ class Plugin(object):
         self.count = self.setting("height", 20)
         default_text = " ".join(args)
 
-        previous_window = self.nvim.current.window
+        self.previous_window = self.nvim.current.window
 
         self.cmd("wincmd n")
+        self.zem_window = self.nvim.current.window
         self.buffer = self.nvim.current.buffer
         self.buffer.name = "ZEM"
         self.cmd("setlocal filetype=zem_preview")
@@ -141,8 +143,8 @@ class Plugin(object):
         self.cmd("redraw")
         for k,r in self.REMAPED_KEYS.items():
             self.cmd("cnoremap <buffer> {} {}".format(k,r))
-        for k in self.SPECIAL_KEYS:
-            self.cmd("cnoremap <buffer> {} {}".format(k,k.replace("<","<LT>"))) # Special keys just add a <key> sequence
+        for k,r in self.SPECIAL_KEYS.items():
+            self.cmd("cnoremap <buffer> {} <LT>{}>".format(k,r)) # Special keys just type <action>
         if not default_text:
             self.set_buffer_lines_with_usage([])
 
@@ -176,7 +178,7 @@ class Plugin(object):
                         else:
                             raise ValueError("Unknown Option ", v)
         self.close_zem_buffer()
-        self.nvim.current.window = previous_window
+        self.nvim.current.window = self.previous_window
         self.cmd("redraw")
         if match:
             self.command_with_match(cmd, match)
@@ -209,10 +211,21 @@ class Plugin(object):
         m = self.get_db().get(tokenize(q), limit=limit)
         return [ dict(r) for r in m ]
 
+    @neovim.function("ZemGetCompletions", sync=True)
+    def zem_get_completions(self, args):
+        q, limit = args
+        res = []
+        db = self.get_db()
+        cwd = pathlib.Path(db.location).parent
+        matches = db.get(tokenize(q), limit=limit)
+        return complete.completion_results(matches, cwd)
+
     def close_zem_buffer(self):
         """Close the ZEM Window."""
         self.cmd("{}bd".format(self.buffer.number))
         self.buffer = None
+
+    _SPECIAL_KEY_RE = re.compile("<([a-z_]*)(>)?")
 
     def process(self, text):
         """Update the list of matches and process Special Keys.
@@ -233,17 +246,12 @@ class Plugin(object):
         number to select the candidate and open its file.
         """
         try:
-            if '<' in text:
-                if '>' in text:
-                    for key, action in self.SPECIAL_KEYS.items():
-                        if key in text:
-                            self.nvim.input("<BS>"*(len(key))) # remove <key>
-                            self.action(action)
-                            break
-                    else:
-                        raise ValueError("unknown special key", text)
-                else:
-                    pass #start of <key sequence
+            m = self._SPECIAL_KEY_RE.search(text)
+            if m:
+                action, complete = m.groups()
+                if complete:
+                    self.nvim.input("<BS>"*(len(action)+2)) # remove <action>
+                    self.action(action)
             else:
                 self.update_preview(text)
         except:
@@ -285,9 +293,7 @@ class Plugin(object):
             self.set_buffer_lines([ markup(r) for r in results])
 
     def action(self, action):
-        """Perform the action caused by special keys.
-
-        Returns True if the ZEM Prompt is still open"""
+        """Perform the action caused by special keys."""
         if action == 'up':
             self.cmd("normal k")
             self.cmd("redraw")

@@ -4,6 +4,7 @@ import os.path
 from .query import tokenize
 from .db import DB
 from .scanner import *
+from .complete import completion_results
 
 class TokenizeTest(unittest.TestCase):
     def test_tokenize_empty(self):
@@ -192,5 +193,23 @@ class ScanTest(unittest.TestCase):
 
         assert any(r[0].endswith('test.py') for r in rows)
         assert not any(r[0].endswith('test.pyc') for r in rows)
+
+class CompletionTest(unittest.TestCase):
+    #TestString
+    def test_completion_lineno(self):
+        m = {'file':__file__, 'location': '197', 'name':'Hans'}
+        c = completion_results([m], None)
+        info = c['words'][0]['info'].split("\n")
+        assert len(info) == 11
+        assert "#TestString" == info[7].strip()
+
+    def test_completion_regex(self):
+        m = {'file':__file__, 'location': '/^    #TestString$/', 'name':'Hans'}
+        c = completion_results([m], None)
+        info = c['words'][0]['info'].split("\n")
+        assert len(info) == 11
+        assert "#TestString" == info[6].strip()
+
+
 
 # cd .. && py -3 -m pytest zem/test.py
