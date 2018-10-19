@@ -85,9 +85,10 @@ class Plugin(object):
     def zem_update_index(self, *args):
         """Fill the database."""
         t = time.perf_counter()
-        l = self.update_index()
+        i = self.update_index()
         t = time.perf_counter() - t
-        self.nvim.out_write("echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(l,t))
+        s = sum(c for (s,c) in i)
+        self.nvim.out_write("echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(s,t))
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
     def zem_edit(self, args):
@@ -301,9 +302,11 @@ class Plugin(object):
         elif action == 'update':
             self.set_buffer_lines(["Updating..."])
             t = time.perf_counter()
-            l = self.update_index()
+            i = self.update_index()
             t = time.perf_counter() - t
-            self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(l,t)])
+            s = sum(c for (s,c) in i)
+            self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(s,t),
+                *("   {:10s} {:5d}".format(s,c) for (s,c) in i)])
             self._last_tokens = None # allow update after the BS are sent
         else:
             raise ValueError("unknown action",action,key,text)
@@ -343,17 +346,20 @@ class Plugin(object):
         self.set_buffer_lines(lines)
 
     def update_index(self):
-        os.chdir(self.nvim.funcs.getcwd()) # switch to cwd of active buffer/tab, so relative paths are correct
+        os.chdir(self.nvim.funcs.getcwd()) # Make paths in scanners relative to buffer's cwd
         data=[]
+        info=[]
         for source, param in self.setting("sources", [['files',{}],['tags',{}]]):
             base_param = self.setting("source_{}".format(source), {}).copy()
             base_param.update(param)
 
             func = getattr(scanner, source, None)
             if func:
-                data += func(base_param)
+                d = func(base_param)
             else:
-                data += self.nvim.call(source, param)
+                d = self.nvim.call(source, param)
+            info.append((source,len(d)))
+            data.extend(d)
 
         self.get_db().fill(data)
-        return len(data)
+        return info
