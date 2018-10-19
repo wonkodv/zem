@@ -152,7 +152,7 @@ def tags(settings):
             elif pathlib.Path(".tags").exists():
                 tag_file = ".tags"
             else:
-                return []
+                raise ValueError("`tag_command`/`tag_file` setting `.tags` or `tags` file needed")
 
     types = TAGS_DEFAULT_TYPE_MAP
     if type_map:
@@ -160,22 +160,25 @@ def tags(settings):
         types.update(type_map)
 
     if tag_command:
+            print("running ",tag_command)
             p = subprocess.Popen(
                     tag_command,
                     stdin = subprocess.PIPE,
                     stdout = subprocess.PIPE,
                     stderr = subprocess.PIPE,
             )
-            print("running "+tag_command)
             if tag_file:
                 err = p.stderr.read().decode(errors="replace")
                 if p.wait() != 0:
                     raise OSError("Non Zero returncode", p.returncode, tag_command, err)
             else:
                 f = p.stdout
+                use_stdout = True
+
     if tag_file:
         tag_file = pathlib.Path(tag_file)
         f = tag_file.open("rb")
+        use_stdout = False
 
     f = io.TextIOWrapper(f, errors="replace")
 
@@ -206,12 +209,16 @@ def tags(settings):
                 typ, prio = types.get(typ, ("X-"+typ, 0))
             result.append((name, typ, file, extra, location, prio))
 
-    if tag_command:
-        if not tag_file:
-            err = p.stderr.read().decode(errors="replace")
-            if p.wait(timeout=0.1) != 0:
-                raise OSError("Non Zero returncode", p.returncode, tag_command, err)
+    if use_stdout:
+        err = p.stderr.read().decode(errors="replace")
+        if p.wait(timeout=0.5) != 0:
+            raise OSError("Non Zero returncode", p.returncode, tag_command, err)
+        if err:
             print(err)
+        print("scanned {} tags from {}".format(len(result), tag_command))
+        if not result:
+            print("does command send to stdout?")
+    else:
+        print("scanned {} tags from {}".format(len(result), tag_file))
 
-    print("scanned {} tags from {}".format(len(result),tag_file))
     return result
