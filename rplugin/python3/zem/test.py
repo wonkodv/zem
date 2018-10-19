@@ -212,4 +212,4 @@ class CompletionTest(unittest.TestCase):
 
 
 
-# cd .. && py -3 -m pytest zem/test.py
+# cd %:h/.. && python3 -m pytest zem/test.py

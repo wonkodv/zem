@@ -62,9 +62,6 @@ class Plugin(object):
         return self.nvim.vars.get("zem_{}".format(key), default)
 
     def cmd(self, cmd):
-        #with open(".zemcommands","at") as f:
-        #    f.write(cmd)
-        #    f.write("\n")
         self.nvim.command(cmd)
 
     def get_db(self):
@@ -130,15 +127,15 @@ class Plugin(object):
         self.zem_window = self.nvim.current.window
         self.buffer = self.nvim.current.buffer
         self.buffer.name = "ZEM"
-        self.cmd("setlocal filetype=zem_preview")
         self.cmd("setlocal winminheight=1")
         self.cmd("setlocal buftype=nofile")
-        #self.cmd("setlocal bufhidden=delete")
         self.cmd("setlocal noswapfile")
-        #self.cmd("setlocal nobuflisted")
         self.cmd("setlocal nowrap")
         self.cmd("setlocal nonumber")
         self.cmd("setlocal nolist")
+        self.cmd("setlocal cursorline")
+        self.cmd("setlocal nocursorcolumn")
+        self.cmd("setlocal filetype=zem_preview") #TODO: add FT file
         self.cmd("wincmd J")
         self.cmd("redraw")
         for k,r in self.REMAPED_KEYS.items():
@@ -156,7 +153,7 @@ class Plugin(object):
                 'highlight':'ZemOnKey',
                 'default': default_text,
             })
-        except KeyboardInterrupt:
+        except KeyboardInterrupt: # TODO catch nvim error, check text against keyboard interrupt
             text = None
         self.nvim.funcs.inputrestore()
 
@@ -193,9 +190,6 @@ class Plugin(object):
         return a list of highlight options for the input string
         """
         text, = args
-        #self.nvim.async_call(self.process, text)
-        # TODO: Make async, needs synchronisation when mappings are invoked
-        # -prev <CR> triggers async call to process, input closes, process is called, clash
         self.process(text)
         return []
 
@@ -230,7 +224,7 @@ class Plugin(object):
     def process(self, text):
         """Update the list of matches and process Special Keys.
 
-        called asyncronously with the current content of the ZEM Prompt
+        called syncronously with the current content of the ZEM Prompt
 
         Special keys are handled by a mapping in the prompt that inserts
         <key> when a special key is pressed.
@@ -238,12 +232,7 @@ class Plugin(object):
         remove the sequence.
 
         If the prompt does not contain a special-key-sequence, is not empty or
-        invalid (a single `=`), the db is queried for matches and they are
-        inserted into the Preview Window.
-
-        The latest result set is cached in `self.candidates`. <UP> and <DOWN> change
-        the selected line in the preview window, <TAB> or <CR> use the line
-        number to select the candidate and open its file.
+        invalid (a single `=`), schedules async Update of the preview window.
         """
         try:
             m = self._SPECIAL_KEY_RE.search(text)
@@ -253,44 +242,53 @@ class Plugin(object):
                     self.nvim.input("<BS>"*(len(action)+2)) # remove <action>
                     self.action(action)
             else:
-                self.update_preview(text)
+                self.nvim.async_call(self.update_preview, text)
         except:
             self.on_error()
 
-    def update_preview(self, text):
-        """Updatet the matches in the preview window."""
-        tokens = tokenize(text, ignore=['option'])
-        if tokens == self._last_tokens:  # only query the db if anything changed
-            return
-        self._last_tokens = tokens
-        if not any(tokens):
-            self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
-            return
-        results = self.get_db().get(tokens, limit=self.count)
-        results = list(reversed(results))
-        self.candidates = results
-        if not results:
-            self.set_buffer_lines([
-                "== No Matches ==",
-                "Maybe update the Database with <C-U>?",
-                "tokens: {}".format(tokens),
-            ])
+    def format_match(self, row):
+        fn = row['file'][-30:]
+        loc = row['location']
+        if loc:
+            loc = ":"+loc[:20]
         else:
-            def mkup(row):
-                fn = row['file'][-30:]
-                loc = row['location']
-                if loc:
-                    loc = ":"+loc[:20]
-                else:
-                    loc = ""
-                extra = row['extra']
-                if extra:
-                    pass
-                else:
-                    extra = ""
-                return "{row[name]:35s} {row[type]:15} {fn:>30}{loc:20} {extra}".format(row=row, loc=loc, extra=extra, fn=fn)
-            markup = self.setting("markup", mkup)
-            self.set_buffer_lines([ markup(r) for r in results])
+            loc = ""
+        extra = row['extra']
+        if extra:
+            pass
+        else:
+            extra = ""
+        return "{row[name]:35s} {row[type]:15} {fn:>30}{loc:20} {extra}".format(row=row, loc=loc, extra=extra, fn=fn)
+
+    def update_preview(self, text):
+        """Updatet the matches in the preview window.
+
+        The latest result set is cached in `self.candidates`. <UP> and <DOWN> change
+        the selected line in the preview window, <TAB> or <CR> use the line
+        number to select the candidate and open its file.
+        """
+        try:
+            tokens = tokenize(text, ignore=['option'])
+            if tokens == self._last_tokens:  # only query the db if anything changed
+                return
+            self._last_tokens = tokens
+            if not any(tokens):
+                self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
+                return
+            results = self.get_db().get(tokens, limit=self.count)
+            results = list(reversed(results))
+            self.candidates = results
+            if not results:
+                self.set_buffer_lines([
+                    "== No Matches ==",
+                    "Maybe update the Database with <C-U>?",
+                    "tokens: {}".format(tokens),
+                ])
+            else:
+                markup = self.setting("format", self.format_match)
+                self.set_buffer_lines([ markup(r) for r in results])
+        except:
+            self.on_error()
 
     def action(self, action):
         """Perform the action caused by special keys."""
