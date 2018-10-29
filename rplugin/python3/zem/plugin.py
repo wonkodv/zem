@@ -17,24 +17,26 @@ Query Syntax:
     WORD    fuzzy match against Name
     :WORD   fuzzy match against Extra (e.g. surronding class, ...)
     /WORD   fuzzy match against Path
-    =WORD   prefix match against types
-            Multiple Types enlarge the ResultSet
+    =WORD   prefix match against types. Multiple Types enlarge the ResultSet
 Special Keys:
     <ESC>       Stop ZEM, don't change location
-    <UP> <DOWN> Change selected match
+    <UP>/<DOWN> Change selected match
     <CR>        Open the selected match
-    <TAB> <C-P> Open the selected match in a new tab / PreviewWindow
+    <TAB>/<C-P> Open the selected match in a new Tab / PreviewWindow
     <C-U>       ReBuild the Database
+    <C-T>       Show all available Types
 Using DataBase {} ({} Rows)"""
-
 
 @neovim.plugin
 class Plugin(object):
+    # Keys that cause an Action
     SPECIAL_KEYS = {
             "<up>"  :"up",
             "<down>":"down",
             "<c-u>" :"update",
+            "<c-t>" :"types",
     }
+    # mapped keys in the comand Prompt (not re-maped to special keys, but to normal command-line actions)
     REMAPED_KEYS = {
             "<tab>" :"<END> -tab  <CR>",
             "<c-p>" :"<END> -prev <CR>",
@@ -308,6 +310,12 @@ class Plugin(object):
             self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(s,t),
                 *("   {:10s} {:5d}".format(s,c) for (s,c) in i)])
             self._last_tokens = None # allow update after the BS are sent
+        elif action == 'types':
+            types = self.get_db().get_types()
+            self.set_buffer_lines( [
+                "There are {} types:".format(len(types)),
+                *("    "+t for t in types)
+                ])
         else:
             raise ValueError("unknown action",action,key,text)
 

@@ -67,6 +67,18 @@ class DB:
 
         return self.con.execute(q, params).fetchall()
 
+    def get_types(self):
+        q = """
+            SELECT DISTINCT
+                type
+            FROM
+                zem
+            ORDER BY
+                type ASC
+            """
+        return [r['type'] for r in self.con.execute(q)]
+
+
     def _tokens_to_where_clause(self, tokens):
         and_clauses = ["1=1"]
         and_params = []
