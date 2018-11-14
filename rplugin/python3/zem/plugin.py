@@ -250,7 +250,7 @@ class Plugin(object):
             self.on_error()
 
     def format_match(self, row):
-        fn = row['file'][-30:]
+        fn = row['file'][-50:]
         loc = row['location']
         if loc:
             loc = ":"+loc[:20]
