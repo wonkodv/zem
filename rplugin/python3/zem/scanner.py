@@ -188,6 +188,8 @@ def tags(settings):
             if line.startswith("!"):
                 continue
             parts = line.strip().split("\t")
+            if not len(parts) >= 3:
+                raise ValueError("Invalid Tags-Line", line)
             name = parts[0]
             file  = parts[1]
             location = parts[2]
