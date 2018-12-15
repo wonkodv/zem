@@ -39,6 +39,7 @@ def completion_results(matches, cwd):
                 'word': m['name'],
                 'icase':1,
                 'menu': m['file'],
+                'dup':1,
                 'info': info
             }
         res.append(r)
