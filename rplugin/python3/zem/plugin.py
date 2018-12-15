@@ -138,6 +138,7 @@ class Plugin(object):
         self.cmd("setlocal nolist")
         self.cmd("setlocal cursorline")
         self.cmd("setlocal nocursorcolumn")
+        self.cmd("setlocal scrolloff=0")
         self.cmd("setlocal filetype=zem_preview") #TODO: add FT file
         self.cmd("wincmd J")
         self.cmd("redraw")
