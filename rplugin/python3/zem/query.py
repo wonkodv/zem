@@ -1,23 +1,29 @@
 
-TOKEN_TYPES = {
-    'type':  ['=',  'prefix', 'type',   'or'  ],
-    'file':  ['/',  'fuzzy',  'file',   'and' ],
-    'option':['-',  'ignore', 'option', None  ],
-    'extra': [':',  'fuzzy',  'extra',  'and' ],
-    'name': ['',   'fuzzy',  'name',  'and' ],
-}
+import collections
+
+TokenTyp = collections.namedtuple('TokenTyp',' prefix matchtyp attribute grouping ')
+
+TOKEN_TYPES = (
+    TokenTyp('=', 'prefix', 'type',   'or'),
+    TokenTyp('/', 'fuzzy',  'file',   'and'),
+    TokenTyp('|', 'word',   'file',   'and'),
+    TokenTyp('-', 'ignore', 'option', None),
+    TokenTyp(':', 'fuzzy',  'extra',  'and'),
+    TokenTyp('!', 'prefix', 'name',   'and'),
+    TokenTyp('',  'fuzzy',  'name',   'and'),
+)
 
 def tokenize(text, *, ignore=[]):
     query = []
     for p in text.split():
         if not p:
             continue
-        for typ, (prefix, *_) in TOKEN_TYPES.items():
-            l = len(prefix)
-            if p.startswith(prefix):
+        for tt in TOKEN_TYPES:
+            l = len(tt.prefix)
+            if p.startswith(tt.prefix):
                 if len(p) > l:
-                    if typ not in ignore:
-                        query.append((typ, p[l:]))
+                    if tt not in ignore:
+                        query.append((tt, p[l:]))
                 break
     return query
 

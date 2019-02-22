@@ -13,7 +13,8 @@ class TokenizeTest(unittest.TestCase):
 
     def test_tokenize_simple(self):
         t = tokenize("  aBC =File :ext =Def -opt")
-        assert t == [
+
+        assert [(tt.attribute, v) for (tt,v) in t] == [
                 ("name","aBC"),
                 ("type","File"),
                 ("extra","ext"),
@@ -23,7 +24,9 @@ class TokenizeTest(unittest.TestCase):
 
     def test_tokenize_unfinished_type(self):
         t = tokenize("  aBC =")
-        assert t == [("name","aBC")]
+        assert [(tt.attribute, v) for (tt,v) in t] == [
+                ("name","aBC"),
+        ]
 
 
 class DBTest(unittest.TestCase):
@@ -195,21 +198,31 @@ class ScanTest(unittest.TestCase):
         assert not any(r[0].endswith('test.pyc') for r in rows)
 
 class CompletionTest(unittest.TestCase):
-    #TestString
     def test_completion_lineno(self):
-        m = {'file':__file__, 'location': '197', 'name':'Hans'}
+        m = {'file':__file__, 'location': '220', 'name':'Hans'}
         c = completion_results([m], None)
         info = c['words'][0]['info'].split("\n")
-        assert len(info) == 11
-        assert "#TestString" == info[7].strip()
+        assert len(info) == 6
+        assert "#TestString" == info[0].strip()
+        # info ends with \n so last line is Empty. -2 is #Last ContextLine
+        assert "# Last ContextLine" == info[-2].strip()
 
     def test_completion_regex(self):
         m = {'file':__file__, 'location': '/^    #TestString$/', 'name':'Hans'}
         c = completion_results([m], None)
         info = c['words'][0]['info'].split("\n")
-        assert len(info) == 11
-        assert "#TestString" == info[6].strip()
+        assert len(info) == 6
+        assert "#TestString" == info[0].strip()
+        assert "# Last ContextLine" == info[-2].strip()
 
 
+
+    #TestString
+    #2 KEEP TestString on Line 220
+    #3
+    #4
+    # Last ContextLine
+    #6
+    #7
 
 # cd %:h/.. && python3 -m pytest zem/test.py

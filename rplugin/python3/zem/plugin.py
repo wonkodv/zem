@@ -171,7 +171,7 @@ class Plugin(object):
             else:
                 cmd = "edit"
                 for t,v in tokenize(text):
-                    if t == 'option':
+                    if t.attribute == 'option':
                         if v == 'tab':
                             cmd = "tabedit"
                         elif v == 'prev':

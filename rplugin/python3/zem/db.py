@@ -80,26 +80,28 @@ class DB:
 
 
     def _tokens_to_where_clause(self, tokens):
-        and_clauses = ["1=1"]
+        and_clauses = []
         and_params = []
         or_clauses = []
         or_params = []
         for typ, val in tokens:
-            _, match_type, column, op = TOKEN_TYPES[typ]
+            _, match_type, column, op = typ
 
-            if match_type == 'fuzzy':
+            if typ.matchtyp == 'fuzzy':
                 val = "%{}%".format("%".join(val))
-            elif match_type == 'prefix':
+            elif typ.matchtyp == 'word':
+                val = "%{}%".format(val)
+            elif typ.matchtyp == 'prefix':
                 val = "{}%".format(val)
-            elif match_type == 'ignore':
+            elif typ.matchtyp == 'ignore':
                 continue
             else:
                 raise ValueError("unknown type", match_type)
 
-            if op == 'and':
+            if typ.grouping == 'and':
                 and_clauses.append("{} LIKE ?".format(column))
                 and_params.append(val)
-            elif op == 'or':
+            elif typ.grouping == 'or':
                 or_clauses.append("{} LIKE ?".format(column))
                 or_params.append(val)
 
