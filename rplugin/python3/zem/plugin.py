@@ -148,7 +148,6 @@ class Plugin(object):
         """Open the ZEM> Prompt."""
         self.candidates = []
         self._last_tokens = None
-        self.count = self.setting("height", 20)
         default_text = " ".join(args)
 
         self.previous_window = self.nvim.current.window
@@ -310,7 +309,7 @@ class Plugin(object):
             if not any(tokens):
                 self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
                 return
-            results = self.get_db().get(tokens, limit=self.count)
+            results = self.get_db().get(tokens, limit=self.setting('result_count',100))
             results = list(reversed(results))
             self.candidates = results
             if not results:
@@ -377,9 +376,9 @@ class Plugin(object):
         if not self.nvim.current.buffer == self.buffer:
             raise TypeError("Setting buffer Lines but not in ZEM Buffer")
         self.buffer[:] = lines
-        self.cmd("{}wincmd _".format(len(lines)))
-        self.cmd("normal G")   # select first result
+        self.cmd("{}wincmd _".format(min(len(lines), self.setting('height',25 ))))
         self.cmd("redraw")
+        self.cmd("normal G")   # select first result
 
     def set_buffer_lines_with_usage(self, lines):
         db = self.get_db()
