@@ -40,10 +40,20 @@ class DB:
         r = self.con.execute("SELECT COUNT(*) FROM zem;").fetchone()
         return r[0]
 
-    def fill(self, data):
+    def get_stat(self):
+        r = self.con.execute("SELECT type, count(name) as cnt FROM zem GROUP BY type;").fetchall()
+        return r
+
+    def fill(self, data, wipe=True):
         with self.con as con:
-            con.execute("DELETE FROM zem");
-            con.executemany("INSERT INTO zem (name , type, file, extra, location, prio) VALUES (?,?,?,?,?,?)", data)
+            if wipe:
+                con.execute("DELETE FROM zem");
+            for d in data:
+                con.executemany("""
+                        INSERT INTO zem 
+                                (name, type, file, extra, location, prio)
+                        VALUES (?,     ?,    ?,    ?,     ?,        ?)""",
+                        d)
             con.commit()
         con.execute("ANALYZE zem")
 
@@ -57,6 +67,7 @@ class DB:
             WHERE
                 {}
             ORDER BY
+                abs(prio)/prio DESC,
                 length(name ) ASC,
                 prio DESC,
                 name  ASC

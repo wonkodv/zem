@@ -7,7 +7,8 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-def translate(lines, parent=""):
+def _translate(lines, parent=""):
+    """Translate exclude pattenrs like .gitignore to regex."""
     result = []
 
     if parent:
@@ -67,45 +68,26 @@ def translate(lines, parent=""):
 
     return result
 
-def files(settings={}):
-    """Index the directory Tree."""
-    root    = settings.get("root", ".")
-    fullpath= settings.get("matchpath", False)
-    typ     = settings.get("type",    "File")
-    prio    = settings.get("prio",    50)
-    exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
-    exclude = settings.get("exclude", [
-        "*~",
-        ".*/",
-        "*.pyc",
-        "*.o",
-        "*.class",
-        "!*.map",
-    ])
-
-    excludes = translate(exclude)
-    result = []
-
-    count = 0
+def _file_walk(root, exclude, exclude_files):
+    logger = _logger.getChild("_file_walk")
 
     root = pathlib.Path(root)
+
+    logger.info("walk {}, exclude {} and from {}", root, exclude, exclude_files)
+
+    excludes = _translate(exclude)
+
     def walk(d, exclude_stack):
-        nonlocal count
-        count += 1
         if d.is_file():
-            rp = d.as_posix()
-            if fullpath:
-                name = rp
-            else:
-                name = d.name
-            result.append((name, typ, rp, None, None, prio))
+            yield d.relative_to(root)
             return
-        for f in exfiles:
+        for f in exclude_files:
             p = d/f
             if p.is_file():
+                logger.debug("add {} to excludes", f)
                 with p.open("rt") as f:
-                    x = translate(f,d.relative_to(root).as_posix())
-                    exclude_stack = exclude_stack + x
+                    x = _translate(f, d.relative_to(root).as_posix())
+                exclude_stack = exclude_stack + x
         for p in d.glob('*'):
             s = p.relative_to(root).as_posix()
             isdir = p.is_dir()
@@ -120,12 +102,118 @@ def files(settings={}):
                         exclude = True
                         break
             if not exclude:
-                walk(p, exclude_stack)             # implicit include
+                yield from walk(p, exclude_stack)             # implicit include
 
-    walk(root, excludes)
+    yield from walk(root, excludes)
 
-    print("scanned {} locations, found {} files".format(count, len(result)))
-    return result
+def files(settings={}):
+    """Index the directory Tree."""
+
+    logger = _logger.getChild("files")
+
+    root    = settings.get("root", ".")
+    fullpath= settings.get("matchpath", False)
+    typ     = settings.get("type",    "File")
+    prio    = settings.get("prio",    50)
+    exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
+    exclude = settings.get("exclude", [
+        "*~",
+        ".*/",
+        "*.pyc",
+        "*.o",
+        "*._*",
+        "*.class",
+        "!*.map",
+    ])
+
+    root = pathlib.Path(root)
+
+    logger.info("Index files in {}", root.absolute().as_posix())
+    for f in _file_walk(root, exclude, exfiles):
+        yield (f.name, typ, f.as_posix(), None, None, prio)
+
+
+def lines(settings):
+    """Index lines of files.
+
+    to only search some files, set exclude to '*','!*.c','!*.h' and exclude_files to [] if they
+    contain !file patterns"""
+
+    logger = _logger.getChild("lines")
+
+    root    = settings.get("root", ".")
+    typ     = settings.get("type",    "UseLine")
+    prio    = settings.get("prio",    -10)
+    exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
+    limit   = settings.get("size_limit", 1*1024*1024)
+    r       = settings.get('filter', r'[a-zA-Z_0-9]')
+    exclude = settings.get("exclude", [
+        "*~",
+        ".*",
+        "*.pyc",
+        "*.o",
+        "*._*",
+        "*.class",
+    ])
+
+    root = pathlib.Path(root)
+
+    logger.debug("Index content of files in {}", root.absolute().as_posix())
+
+    r = re.compile(r)
+
+    for p in _file_walk(root, exclude, exfiles):
+        size = p.stat().st_size
+        if size > limit:
+            logger.info("File too large: {} {}b", p, size)
+            continue
+        logger.info("indexing: {}", p)
+        with p.open("rt") as f:
+            for i, line in enumerate(f):
+                line = line.strip()
+                if r.search(line):
+                    yield (line, typ, p.as_posix(), None, i+1, prio)
+
+def words(settings):
+    """Index lines of files.
+
+    to only search some files, set exclude to '*','!*.c','!*.h' and exclude_files to [] if they
+    contain !file patterns"""
+
+    logger = _logger.getChild("words")
+
+    root    = settings.get("root", ".")
+    typ     = settings.get("type",    "UseWord")
+    prio    = settings.get("prio",    -10)
+    exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
+    limit   = settings.get("size_limit", 100*1024)
+    r       = settings.get('re', r'[a-zA-Z_][a-zA-Z_0-9]+')
+    exclude = settings.get("exclude", [
+        "*~",
+        ".*",
+        "*.pyc",
+        "*.o",
+        "*._*",
+        "*.class",
+    ])
+
+    root = pathlib.Path(root)
+
+    logger.debug("Index words of files in {}", root.absolute().as_posix())
+
+    r = re.compile(r)
+
+    for p in _file_walk(root, exclude, exfiles):
+        size = p.stat().st_size
+        if size > limit:
+            logger.info("File too large: {} {}b", p, size)
+            continue
+        logger.info("indexing: {}", p)
+        with p.open("rt") as f:
+            for i, line in enumerate(f):
+                line = line.strip()
+                for m in r.finditer(line):
+                    yield (m.group(0), typ, p.as_posix(), line, i+1, prio)
 
 TAGS_DEFAULT_TYPE_MAP = {
         'd':('Define',      75 ),
@@ -152,44 +240,31 @@ def tags(settings):
 
     tag_file = settings.get("file")
     type_map  = settings.get('type_map')
-    tag_command = settings.get("command")
-    if not tag_command:
-        if not tag_file:
-            if pathlib.Path("tags").exists():
-                tag_file = "tags"
-            elif pathlib.Path(".tags").exists():
-                tag_file = ".tags"
-            else:
-                raise ValueError("`tag_command`/`tag_file` setting `.tags` or `tags` file needed")
 
     types = TAGS_DEFAULT_TYPE_MAP
     if type_map:
+
         types = types.copy()
         types.update(type_map)
 
-    if tag_command:
-            print("running ",tag_command)
-            p = subprocess.Popen(
-                    tag_command,
-                    stdin = subprocess.PIPE,
-                    stdout = subprocess.PIPE,
-                    stderr = subprocess.PIPE,
-            )
-            if tag_file:
-                err = p.stderr.read().decode(errors="replace")
-                if p.wait() != 0:
-                    raise OSError("Non Zero returncode", p.returncode, tag_command, err)
-            else:
-                f = p.stdout
-                use_stdout = True
-
-    if tag_file:
+    if tag_file[0] == '!':
+        logger.info("running %s", tag_file)
+        p = subprocess.Popen(
+                tag_file[1:],
+                stdin = subprocess.PIPE,
+                stdout = subprocess.PIPE,
+                stderr = subprocess.PIPE,
+        )
+        f = p.stdout
+    else:
+        p = None
+        logger.info("Parsing %s", tag_file)
         tag_file = pathlib.Path(tag_file)
         f = tag_file.open("rb")
-        use_stdout = False
 
     f = io.TextIOWrapper(f, errors="replace")
 
+    count = 0
     result = []
     with f:
         for line in f:
@@ -199,7 +274,9 @@ def tags(settings):
             if not len(parts) >= 3:
                 raise ValueError("Invalid Tags-Line", line)
             name = parts[0]
-            file  = parts[1]
+            file  = parts[1].replace("\\","/")
+            if file.startswith('./'):
+                file = file[2:]
             location = parts[2]
             if location[-2:] == ';"':
                 location = location[:-2]
@@ -217,18 +294,16 @@ def tags(settings):
                         extra = extra + field + " "
             if typ:
                 typ, prio = types.get(typ, ("X-"+typ, 0))
-            result.append((name, typ, file, extra, location, prio))
+            yield (name, typ, file, extra, location, prio)
+            count += 1;
 
-    if use_stdout:
+    logger.debug("Parsed %d records", count)
+
+    if p:
         err = p.stderr.read().decode(errors="replace")
         if p.wait(timeout=0.5) != 0:
-            raise OSError("Non Zero returncode", p.returncode, tag_command, err)
+            raise OSError("Non Zero returncode", p.returncode, tag_file, err)
         if err:
-            print(err)
-        print("scanned {} tags from {}".format(len(result), tag_command))
-        if not result:
-            print("does command send to stdout?")
-    else:
-        print("scanned {} tags from {}".format(len(result), tag_file))
-
-    return result
+            logger.warn("command printed to stderr: %s", err)
+        if not count:
+            logger.warn("No Tags from command ", tag_file)

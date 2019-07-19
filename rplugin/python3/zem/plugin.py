@@ -113,9 +113,9 @@ class Plugin(object):
     def zem_update_index(self, *args):
         """Fill the database."""
         t = time.perf_counter()
-        i = self.update_index()
+        self.update_index()
         t = time.perf_counter() - t
-        s = sum(c for (s,c) in i)
+        s = self.get_db().get_size()
         self.nvim.out_write("echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(s,t))
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
@@ -335,11 +335,12 @@ class Plugin(object):
         elif action == 'update':
             self.set_buffer_lines(["Updating..."])
             t = time.perf_counter()
-            i = self.update_index()
+            self.update_index()
             t = time.perf_counter() - t
-            s = sum(c for (s,c) in i)
+            s = self.get_db().get_size()
+            i = self.get_db().get_stat()
             self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(s,t),
-                *("   {:10s} {:5d}".format(s,c) for (s,c) in i)])
+                *(" {:20s} {:5d}".format(r['type'], r['cnt']) for r in i)])
             self._last_tokens = None # allow update after the BS are sent
         elif action == 'types':
             types = self.get_db().get_types()
@@ -396,9 +397,7 @@ class Plugin(object):
             if func:
                 d = func(base_param)
             else:
-                d = self.nvim.call(source, param)
-            info.append((source,len(d)))
-            data.extend(d)
+                d = self.nvim.call(source, base_param)
+            data.append(d)
 
         self.get_db().fill(data)
-        return info
