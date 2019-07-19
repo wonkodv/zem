@@ -3,6 +3,10 @@ import re
 import subprocess
 import io
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 def translate(lines, parent=""):
     result = []
 
@@ -142,6 +146,10 @@ TAGS_DEFAULT_TYPE_MAP = {
         }
 
 def tags(settings):
+    logger = _logger.getChild("tags")
+
+    logger.debug("running in %s", pathlib.Path.cwd().absolute())
+
     tag_file = settings.get("file")
     type_map  = settings.get('type_map')
     tag_command = settings.get("command")

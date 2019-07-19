@@ -3,12 +3,32 @@ import pathlib
 import time
 import os
 import re
+import logging
+
 from .db import DB
 from . import scanner
 from . import complete
 from pathlib import Path
 
 from .query import tokenize
+
+logger = logging.getLogger(__name__)
+
+class BetterLogRecord(logging.LogRecord):
+    def getMessage(self):
+        msg = str(self.msg)
+        if self.args:
+            try:
+                msg = msg % self.args
+            except TypeError:
+                try:
+                    msg=msg.format(*self.args)
+                except (IndexError, ValueError):
+                    msg = msg + repr(self.args)
+        return msg
+
+logging.setLogRecordFactory(BetterLogRecord)
+
 
 VERSION = '0.2'
 
@@ -48,12 +68,16 @@ class Plugin(object):
         self.nvim = nvim
         self._db = None
         self.buffer = None
+        log_level = self.setting("loglevel", logging.INFO)
+        if isinstance(log_level, str):
+            log_level = getattr(logging, log_level, logging.INFO)
+        logging.root.setLevel(log_level)
+        logger.setLevel(log_level)
 
     def on_error(self):
+        logger.exception("Exception occured")
         import traceback
         lines = traceback.format_exc()
-        with open(".zem.errors","at") as f:
-            f.write(lines)
         lines = lines.split("\n")
         try:
             self.set_buffer_lines(lines)
@@ -61,7 +85,9 @@ class Plugin(object):
             pass
 
     def setting(self, key, default):
-        return self.nvim.vars.get("zem_{}".format(key), default)
+        val = self.nvim.vars.get("zem_{}".format(key), default)
+        logger.error("Get Setting {}: {}", key, val)
+        return val
 
     def cmd(self, cmd):
         self.nvim.command(cmd)
@@ -157,8 +183,11 @@ class Plugin(object):
                 'highlight':'ZemOnKey',
                 'default': default_text,
             })
-        except KeyboardInterrupt: # TODO catch nvim error, check text against keyboard interrupt
+        except neovim.NvimError as e:
+            exc = e
             text = None
+        else:
+            exc = None
         self.nvim.funcs.inputrestore()
 
         if text:
@@ -183,7 +212,8 @@ class Plugin(object):
         self.cmd("redraw")
         if match:
             self.command_with_match(cmd, match)
-
+        elif exc:
+            self.nvim.command('echoerr {}'.format(repr(repr(exc)))) # poor man's str escape
 
     @neovim.function("ZemOnKey",sync=True)
     def zem_on_key(self, args):
@@ -336,7 +366,7 @@ class Plugin(object):
             self.nvim.vars['zem_command'] = cmd
             self.cmd(cmd)
             self.cmd("nohlsearch")
-        except neovim.api.nvim.NvimError:
+        except neovim.NvimError:
             pass # something like ATTENTION, swapfile or so..
 
     def set_buffer_lines(self, lines):
