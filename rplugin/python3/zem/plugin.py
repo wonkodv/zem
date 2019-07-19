@@ -35,9 +35,10 @@ VERSION = '0.2'
 USAGE = """== ZEM v{} ==
 Query Syntax:
     WORD    fuzzy match against Name
+    =WORD   prefix match against types. Multiple Types enlarge the ResultSet
     :WORD   fuzzy match against Extra (e.g. surronding class, ...)
     /WORD   fuzzy match against Path
-    =WORD   prefix match against types. Multiple Types enlarge the ResultSet
+    !WORD   exact match against name
 Special Keys:
     <ESC>       Stop ZEM, don't change location
     <UP>/<DOWN> Change selected match

@@ -6,10 +6,9 @@ TokenTyp = collections.namedtuple('TokenTyp',' prefix matchtyp attribute groupin
 TOKEN_TYPES = (
     TokenTyp('=', 'prefix', 'type',   'or'),
     TokenTyp('/', 'fuzzy',  'file',   'and'),
-    TokenTyp('|', 'word',   'file',   'and'),
     TokenTyp('-', 'ignore', 'option', None),
     TokenTyp(':', 'fuzzy',  'extra',  'and'),
-    TokenTyp('!', 'prefix', 'name',   'and'),
+    TokenTyp('!', 'exact', 'name',   'and'),
     TokenTyp('',  'fuzzy',  'name',   'and'),
 )
 

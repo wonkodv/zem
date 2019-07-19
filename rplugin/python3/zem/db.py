@@ -100,8 +100,8 @@ class DB:
 
             if typ.matchtyp == 'fuzzy':
                 val = "%{}%".format("%".join(val))
-            elif typ.matchtyp == 'word':
-                val = "%{}%".format(val)
+            elif typ.matchtyp == 'exact':
+                pass
             elif typ.matchtyp == 'prefix':
                 val = "{}%".format(val)
             elif typ.matchtyp == 'ignore':
