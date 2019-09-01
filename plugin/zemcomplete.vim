@@ -14,7 +14,7 @@ function! ZemComplete(findstart, base)
         endtry
         let line = getline('.')
         let start = col('.') - 1
-        while start > 0 && line[start - 1] =~ '[a-zA-Z0-9_/.:=-]'
+        while start > 0 && line[start - 1] =~ '[a-zA-Z0-9_/:=-]'
             let start -= 1
         endwhile
         return start
