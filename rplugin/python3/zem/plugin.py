@@ -12,25 +12,7 @@ from pathlib import Path
 
 from .query import tokenize
 
-logger = logging.getLogger(__name__)
-
-class BetterLogRecord(logging.LogRecord):
-    def getMessage(self):
-        msg = str(self.msg)
-        if self.args:
-            try:
-                msg = msg % self.args
-            except TypeError:
-                try:
-                    msg=msg.format(*self.args)
-                except (IndexError, ValueError):
-                    msg = msg + repr(self.args)
-        return msg
-
-logging.setLogRecordFactory(BetterLogRecord)
-
-
-VERSION = '0.2'
+VERSION = '0.3'
 
 USAGE = """== ZEM v{} ==
 Query Syntax:
@@ -47,6 +29,23 @@ Special Keys:
     <C-U>       ReBuild the Database
     <C-T>       Show all available Types
 Using DataBase {} ({} Rows)"""
+
+logger = logging.getLogger(__name__)
+
+class BetterLogRecord(logging.LogRecord):
+    def getMessage(self):
+        msg = str(self.msg)
+        if self.args:
+            try:
+                msg = msg % self.args
+            except TypeError:
+                try:
+                    msg=msg.format(*self.args)
+                except (IndexError, ValueError):
+                    msg = msg + repr(self.args)
+        return msg
+
+logging.setLogRecordFactory(BetterLogRecord)
 
 @neovim.plugin
 class Plugin(object):

@@ -254,6 +254,7 @@ def tags(settings):
                 stdin = subprocess.PIPE,
                 stdout = subprocess.PIPE,
                 stderr = subprocess.PIPE,
+                shell=True,
         )
         f = p.stdout
     else:
