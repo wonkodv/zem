@@ -376,8 +376,8 @@ class Plugin(object):
             raise TypeError("Setting buffer Lines but not in ZEM Buffer")
         self.buffer[:] = lines
         self.cmd("{}wincmd _".format(min(len(lines), self.setting('height',25 ))))
-        self.cmd("redraw")
         self.cmd("normal G")   # select first result
+        self.cmd("redraw")
 
     def set_buffer_lines_with_usage(self, lines):
         db = self.get_db()

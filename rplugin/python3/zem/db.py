@@ -68,7 +68,7 @@ class DB:
                 {}
             ORDER BY
                 abs(prio)/prio DESC,
-                length(name ) ASC,
+                length(name) ASC,
                 prio DESC,
                 name  ASC
             """.format(where)
