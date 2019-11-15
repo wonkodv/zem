@@ -224,9 +224,9 @@ TAGS_DEFAULT_TYPE_MAP = {
         'u':('TypeUnion',   75 ), #  union
         's':('TypeStruct',  75 ), #  struct
         'c':('TypeClass',   75 ), #  class
-        'f':('ImpFunction', 80 ), #  function  implementation
-        'v':('ImpVar',      80 ), #  variable
-        'l':('ImpLabel',    85 ), #  label
+        'f':('ImpFunction', 85 ), #  function  implementation
+        'v':('ImpVar',      85 ), #  variable
+        'l':('ImpLabel',    80 ), #  label
         'm':('ImpMember',   80 ), #  member
         'e':('DefEnum',     75 ), #  enum      value
         'F':('File',        50 ),
@@ -271,20 +271,26 @@ def tags(settings):
         for line in f:
             if line.startswith("!"):
                 continue
-            parts = line.strip().split("\t")
-            if not len(parts) >= 3:
-                raise ValueError("Invalid Tags-Line", line)
-            name = parts[0]
+            l = line.strip()
+
+            name,_,l = l.partition("\t")
+            file,_,l  = l.partition("\t")
+            location,_,l = l.rpartition(';"\t') # location regex could contain tabs
+
             file  = parts[1].replace("\\","/")
             if file.startswith('./'):
                 file = file[2:]
-            location = parts[2]
-            if location[-2:] == ';"':
-                location = location[:-2]
-            location = location.strip()
+
+            if location.startswith("/"):
+                if location[-1] != "/":
+                    raise ValueError("Invalid Tags-location /../ expected", location, line)
+            else:
+                if not all(c in '0123456789' for c in location):
+                    raise ValueError("Invalid Tags-location (/../ or number expected)", location, line)
+
             typ = ""
             extra = ""
-            for field in parts[3:]:
+            for field in l:
                 if not ':' in field:
                     typ = field
                 else:
@@ -294,7 +300,7 @@ def tags(settings):
                     elif val:
                         extra = extra + field + " "
             if typ:
-                typ, prio = types.get(typ, ("X-"+typ, 0))
+                typ, prio = types.get(typ, ("X-"+typ, 5))
             yield (name, typ, file, extra, location, prio)
             count += 1;
 

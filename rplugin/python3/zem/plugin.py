@@ -355,10 +355,13 @@ class Plugin(object):
         if l:
             if l[-1] == l[0] == '/':
                 l = l[1:-1]
-                l = r"/\M{}".format(l) # use  nomagic mode, where only ^ $ / and \ are special
-                l = l.replace(match['name'],"\\zs"+match['name']) # search for identifier, not start of line (not supported by nvim yet)
-                l = l.replace("\\","\\\\").replace(" ","\\ ") # escape backslashes, then escape space
-            l = "+" + l
+                l = "\M"+l # use  nomagic mode, where only ^ $ / and \ are special
+                #l = l.replace(match['name'],"\\zs"+match['name']) # search for identifier, not start of line (not supported by nvim yet)
+                l = l.replace("\t","\\t") # turn tab cahracters into \t regex
+                l = l.replace("\\","\\\\").replace("/","\\/").replace(" ","\\ ") # escape backslashes slashes and spaces for +cmd
+                l = r"+/{}/".format(l)
+            else:
+                l = "+" + l
         else:
             l = ""
         cmd = "{} {} {}".format(command, l, match['file'])

@@ -70,7 +70,8 @@ class DB:
                 abs(prio)/prio DESC,
                 length(name) ASC,
                 prio DESC,
-                name  ASC
+                name  ASC,
+                type ASC
             """.format(where)
         if limit:
             q+="""
