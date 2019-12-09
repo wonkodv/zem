@@ -114,7 +114,8 @@ def files(settings={}):
     root    = settings.get("root", ".")
     fullpath= settings.get("matchpath", False)
     typ     = settings.get("type",    "File")
-    prio    = settings.get("prio",    50)
+    subprio = settings.get("subprio", 50)
+    prio    = settings.get("prio",    100)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     exclude = settings.get("exclude", [
         "*~",
@@ -130,7 +131,7 @@ def files(settings={}):
 
     logger.info("Index files in {}", root.absolute().as_posix())
     for f in _file_walk(root, exclude, exfiles):
-        yield (f.name, typ, f.as_posix(), None, None, prio)
+        yield (f.name, typ, f.as_posix(), None, None, prio, subprio)
 
 
 def lines(settings):
@@ -143,7 +144,8 @@ def lines(settings):
 
     root    = settings.get("root", ".")
     typ     = settings.get("type",    "UseLine")
-    prio    = settings.get("prio",    -10)
+    prio    = settings.get("prio",    50)
+    subprio = settings.get("subprio", 50)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     limit   = settings.get("size_limit", 1*1024*1024)
     r       = settings.get('filter', r'[a-zA-Z_0-9]')
@@ -172,7 +174,7 @@ def lines(settings):
             for i, line in enumerate(f):
                 line = line.strip()
                 if r.search(line):
-                    yield (line, typ, p.as_posix(), None, i+1, prio)
+                    yield (line, typ, p.as_posix(), None, i+1, prio, subprio)
 
 def words(settings):
     """Index lines of files.
@@ -184,7 +186,8 @@ def words(settings):
 
     root    = settings.get("root", ".")
     typ     = settings.get("type",    "UseWord")
-    prio    = settings.get("prio",    -10)
+    prio    = settings.get("prio",    50)
+    subprio = settings.get("subprio", 40)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     limit   = settings.get("size_limit", 100*1024)
     r       = settings.get('re', r'[a-zA-Z_][a-zA-Z_0-9]+')
@@ -213,25 +216,58 @@ def words(settings):
             for i, line in enumerate(f):
                 line = line.strip()
                 for m in r.finditer(line):
-                    yield (m.group(0), typ, p.as_posix(), line, i+1, prio)
+                    yield (m.group(0), typ, p.as_posix(), line, i+1, prio, subprio)
 
+# ctags --list-kinds
 TAGS_DEFAULT_TYPE_MAP = {
+    'c': {
+        #k    type          subprio
+        'I':('UseFile',     45 ), #  include
+        'c':('TypeClass',   90 ), #  class
         'd':('Define',      75 ),
-        'p':('Prototype',   70 ), #  Function Prototype
-        'x':('ProtoExtern', 70 ), #  extern    variable
-        't':('TypeDef',     80 ), #  typedef
-        'e':('TypeEnum',    75 ), #  enum
-        'u':('TypeUnion',   75 ), #  union
+        'e':('DefEnum',     75 ), #  enum value
+        'g':('TypeEnum',    75 ), #  enum name
+        'f':('ImpFunc',     85 ), #  function  implementation
+        'l':('ImpVarLoc',   60 ), #  local variable
+        'm':('ImpMember',   80 ), #  member
+        'n':('NameSpace',   70 ),
+        'p':('ProtoFunc',   70 ), #  Function Prototype
         's':('TypeStruct',  75 ), #  struct
-        'c':('TypeClass',   75 ), #  class
+        't':('TypeDef',     80 ), #  typedef
+        'u':('TypeUnion',   75 ), #  union
+        'v':('ImpVar',      85 ), #  variable
+        'x':('ProtoVar',    70 ), #  extern    variable
+        },
+    'py': {
+        #k    type          subprio
+        'c':('TypeClass',   90 ), #  class
+        'f':('ImpFunction', 85 ), #  function  implementation
+        'i':('UseFile',     45 ), #  import
+        'k':('ImpFuncLoc',  60 ), #  local  function  implementation in method
+        'm':('ImpMember',   80 ), #  member
+        'v':('ImpVar',      85 ), #  variable
+        },
+    's': {
+        'd':('Define',      75 ),
+        'l':('ImpLabel',    85 ),
+        'm':('Define',      80 ), #  macro
+        't':('TypeDef',     80 ), #  structs and records
+        },
+    'asm': {
+        'd':('Define',      75 ),
+        'l':('ImpLabel',    85 ),
+        'm':('Define',      80 ), #  macro
+        't':('TypeDef',     80 ), #  structs and records
+        },
+    'default': {
+        #k    type          subprio
+        'c':('TypeClass',   90 ), #  class
         'f':('ImpFunction', 85 ), #  function  implementation
         'v':('ImpVar',      85 ), #  variable
-        'l':('ImpLabel',    80 ), #  label
-        'm':('ImpMember',   80 ), #  member
-        'e':('DefEnum',     75 ), #  enum      value
-        'F':('File',        50 ),
-        'I':('UseFile',     45 ), #  include
-        }
+
+        'F':('File',        50 ), # ctags can create a tag for each file
+        },
+    }
 
 def tags(settings):
     logger = _logger.getChild("tags")
@@ -239,13 +275,23 @@ def tags(settings):
     logger.debug("running in %s", pathlib.Path.cwd().absolute())
 
     tag_file = settings.get("file")
-    type_map  = settings.get('type_map')
+    prio = settings.get("prio", 100)
+    type_map  = settings.get('type_map', {})
+    command = settings.get('command')
 
-    types = TAGS_DEFAULT_TYPE_MAP
-    if type_map:
-
-        types = types.copy()
-        types.update(type_map)
+    if command:
+        if tag_file[0] == '!':
+            raise ValueError("specifyiing both command and !file", command, tagfile)
+        p = subprocess.Popen(
+                command,
+                stdin = subprocess.PIPE,
+                stdout = subprocess.PIPE,
+                stderr = subprocess.PIPE,
+                universal_newlines = True,
+        )
+        logger.info("ctags: " + p.stdout.read())
+        if p.wait() != 0:
+            raise OSError("Non 0 Return Code", p.returncode, p.stderr.read())
 
     if tag_file[0] == '!':
         logger.info("running %s", tag_file)
@@ -277,7 +323,7 @@ def tags(settings):
             file,_,l  = l.partition("\t")
             location,_,l = l.rpartition(';"\t') # location regex could contain tabs
 
-            file  = parts[1].replace("\\","/")
+            file  = file.replace("\\","/")
             if file.startswith('./'):
                 file = file[2:]
 
@@ -290,7 +336,7 @@ def tags(settings):
 
             typ = ""
             extra = ""
-            for field in l:
+            for field in l.split("\t"):
                 if not ':' in field:
                     typ = field
                 else:
@@ -299,9 +345,26 @@ def tags(settings):
                         typ = val
                     elif val:
                         extra = extra + field + " "
-            if typ:
-                typ, prio = types.get(typ, ("X-"+typ, 5))
-            yield (name, typ, file, extra, location, prio)
+            ext = file.rpartition(".")[2]
+            try:
+                typ, subprio = type_map[ext][typ]
+            except KeyError:
+                try:
+                    typ, subprio = type_map['default'][typ]
+                except KeyError:
+                    try:
+                        typ, subprio = type_map[typ]
+                        subprio + 10 # ugly shit: raise TypeError for non int
+                        typ + "" # ugly shit: raise TypeError for non int
+                    except (KeyError, ValueError, TypeError):
+                        try:
+                            typ, subprio = TAGS_DEFAULT_TYPE_MAP[ext][typ]
+                        except KeyError:
+                            try:
+                                typ, subprio = TAGS_DEFAULT_TYPE_MAP['default'][typ]
+                            except KeyError:
+                                typ, subprio = f"X-{ext}-{typ}", 5
+            yield (name, typ, file, extra, location, prio, subprio)
             count += 1;
 
     logger.debug("Parsed %d records", count)

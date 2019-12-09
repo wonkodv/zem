@@ -12,11 +12,12 @@ class DB:
             file        TEXT NOT NULL,
             extra       TEXT,
             location    TEXT,
-            prio        INT NOT NULL
+            prio        INT NOT NULL,
+            subprio     INT NOT NULL
         );
         CREATE INDEX zem_type ON zem(type);
         """
-    _COLUMNS = ['name', 'type', 'file', 'extra', 'location', 'prio']
+    _COLUMNS = ['name', 'type', 'file', 'extra', 'location', 'prio', 'subprio']
 
     def __init__(self, location):
         self.location = location
@@ -51,8 +52,8 @@ class DB:
             for d in data:
                 con.executemany("""
                         INSERT INTO zem 
-                                (name, type, file, extra, location, prio)
-                        VALUES (?,     ?,    ?,    ?,     ?,        ?)""",
+                                (name, type, file, extra, location, prio, subprio)
+                        VALUES (?,     ?,    ?,    ?,     ?,        ?,    ?)""",
                         d)
             con.commit()
         con.execute("ANALYZE zem")
@@ -67,9 +68,9 @@ class DB:
             WHERE
                 {}
             ORDER BY
-                abs(prio)/prio DESC,
-                length(name) ASC,
                 prio DESC,
+                length(name) ASC,
+                subprio DESC,
                 name  ASC,
                 type ASC
             """.format(where)
@@ -97,7 +98,7 @@ class DB:
         or_clauses = []
         or_params = []
         for typ, val in tokens:
-            _, match_type, column, op = typ
+            pos, key, match_type, column, op = typ
 
             if typ.matchtyp == 'fuzzy':
                 val = "%{}%".format("%".join(val))
