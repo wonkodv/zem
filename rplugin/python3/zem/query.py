@@ -22,16 +22,25 @@ def tokenize(text, *, ignore=[]):
             s = False
             if not tt.key:
                 s = token
-            elif len(token) > len(tt.key):
+            else:
                 if tt.pos == 'start':
                     if token.startswith(tt.key):
-                        s = token[len(tt.key):]
+                        if len(token) > len(tt.key):
+                            s = token[len(tt.key):]
+                        else:
+                            break
                 elif tt.pos == 'end':
                     if token.endswith(tt.key):
-                        s = token[:-len(tt.key)]
+                        if len(token) > len(tt.key):
+                            s = token[:-len(tt.key)]
+                        else:
+                            break
                 elif tt.pos == 'in':
                     if tt.key in token:
-                        s = token.replace(tt.key,"",1)
+                        if len(token) > len(tt.key):
+                            s = token.replace(tt.key,"",1)
+                        else:
+                            break
                 else:
                     assert False, (token, tt)
 
