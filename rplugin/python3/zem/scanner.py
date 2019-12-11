@@ -220,6 +220,24 @@ def words(settings):
 
 # ctags --list-kinds
 TAGS_DEFAULT_TYPE_MAP = {
+    'h': {
+        #k    type          subprio
+        'I':('UseFile',     45 ), #  include
+        'c':('TypeClass',   90 ), #  class
+        'd':('Define',      75 ),
+        'e':('DefEnum',     75 ), #  enum value
+        'g':('TypeEnum',    75 ), #  enum name
+        'f':('ImpFunc',     85 ), #  function  implementation
+        'l':('ImpVarLoc',   60 ), #  local variable
+        'm':('ImpMember',   80 ), #  member
+        'n':('NameSpace',   70 ),
+        'p':('ProtoFunc',   70 ), #  Function Prototype
+        's':('TypeStruct',  75 ), #  struct
+        't':('TypeDef',     80 ), #  typedef
+        'u':('TypeUnion',   75 ), #  union
+        'v':('ImpVar',      85 ), #  variable
+        'x':('ProtoVar',    70 ), #  extern    variable
+        },
     'c': {
         #k    type          subprio
         'I':('UseFile',     45 ), #  include
@@ -346,6 +364,7 @@ def tags(settings):
                     elif val:
                         extra = extra + field + " "
             ext = file.rpartition(".")[2]
+            ext = ext.rpartition("/")[2]
             try:
                 typ, subprio = type_map[ext][typ]
             except KeyError:
