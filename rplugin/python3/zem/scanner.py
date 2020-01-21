@@ -311,6 +311,14 @@ def tags(settings):
         if p.wait() != 0:
             raise OSError("Non 0 Return Code", p.returncode, p.stderr.read())
 
+    if not tag_file:
+        for f in '.tags', 'tags':
+            if pathlib.Path(f).is_file():
+                tag_file = f
+
+    if not tag_file:
+        tag_file = '!ctags -o - --recurse'
+
     if tag_file[0] == '!':
         logger.info("running %s", tag_file)
         p = subprocess.Popen(
