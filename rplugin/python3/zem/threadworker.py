@@ -63,13 +63,18 @@ class ThreadWorker(threading.Thread):
             if not self.daemon:
                 warnings.warn(ResourceWarning("ThreadWorker was not stopped", self), source=self)
 
-    def async(self, f):
+    def __call__(self, sync=False):
+        if sync:
+            return self.sync_call
+        return self.async_call
+
+    def async_call(self, f):
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             self.post_async(f, args, kwargs)
         return proxy
 
-    def sync(self, f):
+    def sync_call(self, f):
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             return self.post_sync(f, args, kwargs)
@@ -90,14 +95,14 @@ class ThreadWorkerMixin:
         self._thread_worker.stop()
 
     @staticmethod
-    def async(f):
+    def async_call(f):
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             args[0]._thread_worker.post_async(f, args, kwargs)
         return proxy
 
     @staticmethod
-    def sync(timeout_or_function):
+    def sync_call(timeout_or_function):
         def deco(f):
             @functools.wraps(f)
             def proxy(*args, **kwargs):

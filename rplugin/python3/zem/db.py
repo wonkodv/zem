@@ -2,7 +2,15 @@ import sqlite3
 
 from .query import TOKEN_TYPES
 
-class DB:
+from .threadworker import ThreadWorkerMixin as TWMI
+
+import logging
+import time
+import threading
+import queue
+
+
+class DB(TWMI):
     _SCHEMA = """
         DROP TABLE IF EXISTS zem;
 
@@ -20,12 +28,19 @@ class DB:
     _COLUMNS = ['name', 'type', 'file', 'extra', 'location', 'prio', 'subprio']
 
     def __init__(self, location):
+        self.THREAD_WORKER_NAME=f"DB Worker {location}"
+        self.THREAD_WORKER_DAEMON=True
+        super().__init__()
         self.location = location
-        self.con = sqlite3.connect(location)
-        self.con.row_factory = sqlite3.Row
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__qualname__}")
+
         self._check_and_init()
 
+    @TWMI.sync_call
     def _check_and_init(self):
+        self.con = sqlite3.connect(self.location)
+        self.con.row_factory = sqlite3.Row
+
         try:
             r = self.con.execute("SELECT * FROM zem LIMIT 1").fetchone()
             ok = False
@@ -37,27 +52,31 @@ class DB:
             with self.con as c:
                 c.executescript(self._SCHEMA)
 
+    @TWMI.sync_call
     def get_size(self):
         r = self.con.execute("SELECT COUNT(*) FROM zem;").fetchone()
         return r[0]
 
+    @TWMI.sync_call
     def get_stat(self):
         r = self.con.execute("SELECT type, count(name) as cnt FROM zem GROUP BY type;").fetchall()
         return r
 
-    def fill(self, data, wipe=True):
+    @TWMI.sync_call
+    def fill(self, datas, wipe=True):
         with self.con as con:
             if wipe:
                 con.execute("DELETE FROM zem");
-            for d in data:
+            for data in datas: # can pass several iterators
                 con.executemany("""
                         INSERT INTO zem 
                                 (name, type, file, extra, location, prio, subprio)
                         VALUES (?,     ?,    ?,    ?,     ?,        ?,    ?)""",
-                        d)
+                        data)
             con.commit()
         con.execute("ANALYZE zem")
 
+    @TWMI.sync_call
     def get(self, tokens, limit=None):
         where, params = self._tokens_to_where_clause(tokens)
         q = """
@@ -78,8 +97,24 @@ class DB:
             q+="""
             LIMIT {:d} """.format(limit)
 
-        return self.con.execute(q, params).fetchall()
 
+        t = time.time()
+        result = self.con.execute(q, params).fetchall()
+        t = time.time() - t
+
+        self.logger.debug("%s, %r in %.2fms", q, params, t/1000)
+        return result
+
+    @TWMI.async_call
+    def get_async(self, tokens, callback, *, limit=None):
+        try:
+            result = self.get(tokens, limit)
+            callback(tokens=tokens, result=result)
+        except sqlite3.OperationalError:
+            pass # we were interrupted
+
+
+    @TWMI.sync_call
     def get_types(self):
         q = """
             SELECT DISTINCT
@@ -128,6 +163,14 @@ class DB:
     def close(self):
         self.con.close()
         self.con = None
+        self.stop_thredworker()
 
-    def isOpen(self):
-        return self.con is not None
+    def interrupt(self):
+        i = 0
+        try:
+            self._thread_worker._q.get_nowait()
+            i += 1
+        except queue.Empty:
+            pass
+        self.con.interrupt()
+        self.logger.debug(f" db interrupted, cleared {i} jobs from Q")

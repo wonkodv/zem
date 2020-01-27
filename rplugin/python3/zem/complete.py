@@ -34,7 +34,7 @@ def completion_results(matches, cwd):
         except (FileNotFoundError, ValueError):
             pass
         if not info:
-            info = f"{m['type']}\n{m['location']}\n{m['extra']}"
+            info = ""
         r = {
                 'word': m['name'],
                 'icase':1,

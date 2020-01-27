@@ -18,7 +18,7 @@ class TWTest(unittest.TestCase):
 
     def test_async(self):
         l = []
-        @self.tw.async
+        @self.tw.async_call
         def f(i):
             time.sleep(0.1)
             l.append(i)
@@ -30,7 +30,7 @@ class TWTest(unittest.TestCase):
     def test_sync(self):
         l = []
 
-        @self.tw.sync
+        @self.tw.sync_call
         def f(i):
             time.sleep(0.1)
             l.append(i)
@@ -46,7 +46,7 @@ class TWTest(unittest.TestCase):
 
         class SomeExc(Exception):
             pass
-        @self.tw.sync
+        @self.tw.sync_call
         def f():
             raise SomeExc()
 
@@ -57,12 +57,12 @@ class TWTest(unittest.TestCase):
     def test_sync_from_async(self):
         """sync function should be executed inline."""
         l=[]
-        @self.tw.sync
+        @self.tw.sync_call
         def f():
             l.append(2)
             return 3
 
-        @self.tw.sync
+        @self.tw.sync_call
         def g():
             l.append(1)
             l.append(f())
@@ -74,11 +74,11 @@ class TWTest(unittest.TestCase):
 
     def test_async_from_sync(self):
         l = []
-        @self.tw.async
+        @self.tw.async_call
         def f(x):
             l.append(x)
 
-        @self.tw.sync
+        @self.tw.sync_call
         def g(x):
             f(x)
             time.sleep(0.1) # block tw, f not invoked yet
@@ -92,7 +92,7 @@ class TWTest(unittest.TestCase):
 
     def test_stop_joins(self):
         l = []
-        @self.tw.async
+        @self.tw.async_call
         def f():
             time.sleep(0.1)
             l.append(1)
@@ -105,7 +105,7 @@ class TWTest(unittest.TestCase):
         l = []
         tw = ThreadWorker(name=self._testMethodName)
 
-        @tw.async
+        @tw.async_call
         def f():
             time.sleep(0.1)
             l.append(1)
@@ -120,7 +120,7 @@ class TWTest(unittest.TestCase):
         l = []
         tw = ThreadWorker(name=self._testMethodName)
 
-        @tw.sync
+        @tw.sync_call
         def f():
             pass
         with self.assertRaises(tw.NotStarted):
@@ -131,7 +131,7 @@ class TWTest(unittest.TestCase):
         tw = ThreadWorker(name=self._testMethodName)
         tw.start()
 
-        @tw.async
+        @tw.async_call
         def f():
             time.sleep(0.1)
             l.append(1)
@@ -145,7 +145,7 @@ class TWTest(unittest.TestCase):
     def test_no_resourceWarn_not_started(self):
         l = []
         tw = ThreadWorker(name=self._testMethodName, daemon=False)
-        @tw.async
+        @tw.async_call
         def f():
             l.append(1)
         f()
@@ -160,7 +160,7 @@ class TWTest(unittest.TestCase):
         l = []
         tw = ThreadWorker(name=self._testMethodName, daemon=True)
         tw.start()
-        @tw.async
+        @tw.async_call
         def f():
             time.sleep(0.1)
             l.append(1)
@@ -179,14 +179,14 @@ class TWMITest(unittest.TestCase):
 
         x = y = None
 
-        @ThreadWorkerMixin.sync
+        @ThreadWorkerMixin.sync_call
         def s(self):
             self.x = 1
             time.sleep(0.1)
             self.y = 2
-            
+
             return 3
-        @ThreadWorkerMixin.async
+        @ThreadWorkerMixin.async_call
         def a(self):
             self.x = 1
             time.sleep(0.2)

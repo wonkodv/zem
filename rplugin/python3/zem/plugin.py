@@ -1,9 +1,11 @@
-import neovim
-import pathlib
-import time
-import os
-import re
 import logging
+import neovim
+import os
+import pathlib
+import re
+import time
+import traceback
+import threading
 
 from .db import DB
 from . import scanner
@@ -29,8 +31,6 @@ Special Keys:
     <C-U>       ReBuild the Database
     <C-T>       Show all available Types
 Using DataBase {} ({} Rows)"""
-
-logger = logging.getLogger(__name__)
 
 class BetterLogRecord(logging.LogRecord):
     def getMessage(self):
@@ -66,17 +66,19 @@ class Plugin(object):
 
     def __init__(self, nvim):
         self.nvim = nvim
-        self._db = None
         self.buffer = None
         log_level = self.setting("loglevel", logging.INFO)
         if isinstance(log_level, str):
-            log_level = getattr(logging, log_level, logging.INFO)
-        logging.root.setLevel(log_level)
-        logger.setLevel(log_level)
+            log_level = getattr(logging, log_level.upper(), logging.INFO)
+        logging.getLogger('zem').setLevel(log_level)
+
+        self.logger = logging.getLogger(__name__).getChild(type(self).__qualname__)
+        self.logger.debug("setting LogLevel on zem to {}", log_level)
+
+        self._db = None
 
     def on_error(self):
-        logger.exception("Exception occured")
-        import traceback
+        self.logger.exception("Exception occured")
         lines = traceback.format_exc()
         lines = lines.split("\n")
         try:
@@ -86,7 +88,6 @@ class Plugin(object):
 
     def setting(self, key, default):
         val = self.nvim.vars.get("zem_{}".format(key), default)
-        logger.error("Get Setting {}: {}", key, val)
         return val
 
     def cmd(self, cmd):
@@ -102,12 +103,14 @@ class Plugin(object):
                 loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
             loc = loc.absolute()
             loc = str(loc)
-        if self._db is not None:
-            if loc == self._db.location:
-                return self._db
-            self._db.close()
-        self._db = DB(loc)
-        return self._db
+
+        db = self._db
+        if db is not None:
+            if loc == db.location:
+                return db
+            db.close()
+        db = self._db = DB(loc)
+        return db
 
     @neovim.command("ZemUpdateIndex", sync=False)
     def zem_update_index(self, *args):
@@ -146,7 +149,8 @@ class Plugin(object):
     def zem_prompt(self, args):
         """Open the ZEM> Prompt."""
         self.candidates = []
-        self._last_tokens = None
+        self._last_triggered_tokens = None
+        self._last_fetched_tokens = None
         default_text = " ".join(args)
 
         self.previous_window = self.nvim.current.window
@@ -174,7 +178,6 @@ class Plugin(object):
         if not default_text:
             self.set_buffer_lines_with_usage([])
 
-        match = None
         self.nvim.funcs.inputsave()
         try:
             text = self.nvim.funcs.input({
@@ -182,37 +185,49 @@ class Plugin(object):
                 'highlight':'ZemOnKey',
                 'default': default_text,
             })
+            line = self.nvim.funcs.line('.')
+            exc = None
+        except KeyboardInterrupt:
+            return
         except neovim.NvimError as e:
             exc = e
-            text = None
-        else:
-            exc = None
-        self.nvim.funcs.inputrestore()
+        finally:
+            self.get_db().interrupt()
+            self.close_zem_buffer()
+            self.nvim.funcs.inputrestore()
+            self.nvim.current.window = self.previous_window
+            self.cmd("redraw")
 
+        if exc:
+            self.logger.error(exc)
+            exc = repr(exc)
+            self.nvim.command('echo {}'.format(repr(exc))) # poor man's str escape
+            return
+
+        match = None
+        idx = line - 1
         if text:
-            line = self.nvim.funcs.line('.')
-            idx = line - 1
-            try:
-                match = self.candidates[idx]
-            except (AttributeError, IndexError):
-                pass
-            else:
-                cmd = "edit"
-                for t,v in tokenize(text):
-                    if t.attribute == 'option':
-                        if v == 'tab':
-                            cmd = "tabedit"
-                        elif v == 'prev':
-                            cmd = "pedit"
-                        else:
-                            raise ValueError("Unknown Option ", v)
-        self.close_zem_buffer()
-        self.nvim.current.window = self.previous_window
-        self.cmd("redraw")
+            tokens = tokenize(text)
+            if tokens:
+                if tokens != self._last_fetched_tokens:
+                    match = self.get_db().get(tokens, limit=1)[0]
+                else:
+                    try:
+                        match = self.candidates[idx]
+                    except (AttributeError, IndexError):
+                        match = None
+
         if match:
+            cmd = "edit"
+            for t,v in tokenize(text, ignore=()):
+                if t.attribute == 'option':
+                    if v == 'tab':
+                        cmd = "tabedit"
+                    elif v == 'prev':
+                        cmd = "pedit"
+                    else:
+                        raise ValueError("Unknown Option ", v)
             self.command_with_match(cmd, match)
-        elif exc:
-            self.nvim.command('echoerr {}'.format(repr(repr(exc)))) # poor man's str escape
 
     @neovim.function("ZemOnKey",sync=True)
     def zem_on_key(self, args):
@@ -275,7 +290,7 @@ class Plugin(object):
                     self.nvim.input("<BS>"*(len(action)+2)) # remove <action>
                     self.action(action)
             else:
-                self.nvim.async_call(self.update_preview, text)
+                self.fetch_matches(text)
         except:
             self.on_error()
 
@@ -293,35 +308,43 @@ class Plugin(object):
             extra = ""
         return "{row[name]:35s} {row[type]:15} {fn:>30}{loc:20} {extra}".format(row=row, loc=loc, extra=extra, fn=fn)
 
-    def update_preview(self, text):
-        """Updatet the matches in the preview window.
+    def fetch_matches(self, text):
+        """ Trigger an Updatet of the matches in the preview window. """
 
-        The latest result set is cached in `self.candidates`. <UP> and <DOWN> change
-        the selected line in the preview window, <TAB> or <CR> use the line
-        number to select the candidate and open its file.
-        """
-        try:
-            tokens = tokenize(text, ignore=['option'])
-            if tokens == self._last_tokens:  # only query the db if anything changed
-                return
-            self._last_tokens = tokens
-            if not any(tokens):
-                self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
-                return
-            results = self.get_db().get(tokens, limit=self.setting('result_count',100))
-            results = list(reversed(results))
-            self.candidates = results
-            if not results:
-                self.set_buffer_lines([
-                    "== No Matches ==",
-                    "Maybe update the Database with <C-U>?",
-                    "tokens: {}".format(tokens),
-                ])
-            else:
-                markup = self.setting("format", self.format_match)
-                self.set_buffer_lines([ markup(r) for r in results])
-        except:
-            self.on_error()
+        tokens = tokenize(text)
+        if not any(tokens):
+            self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
+            return
+
+        if tokens == self._last_triggered_tokens:
+            self.logger.debug("Ignore Update for %r", tokens)
+        else:
+            self._last_triggered_tokens = tokens
+            self.logger.info("Trigger Update: %r", tokens)
+            self.get_db().interrupt()
+            self.get_db().get_async(
+                tokens=tokens,
+                limit=self.setting('result_count', 20),
+                callback=self.fetch_matches_cb)
+
+    def fetch_matches_cb(self, result, tokens):
+        self.nvim.async_call(self.update_matches, result, tokens)
+
+    def update_matches(self, matches, tokens):
+        self.logger.info("Update matches: %d %r", len(matches), tokens)
+
+        self._last_fetched_tokens = tokens
+        self.candidates = matches
+
+        if not matches:
+            self.set_buffer_lines([
+                "== No Matches ==",
+                "Maybe update the Database with <C-U>?",
+                "tokens: {}".format(tokens),
+            ])
+        else:
+            markup = self.setting("format", self.format_match)
+            self.set_buffer_lines([ markup(r) for r in matches])
 
     def action(self, action):
         """Perform the action caused by special keys."""
@@ -340,7 +363,7 @@ class Plugin(object):
             i = self.get_db().get_stat()
             self.set_buffer_lines(["Found {} elements in {:.3f} seconds".format(s,t),
                 *(" {:20s} {:5d}".format(r['type'], r['cnt']) for r in i)])
-            self._last_tokens = None # allow update after the BS are sent
+            self._last_fetched_tokens = None # allow update after the BS are sent
         elif action == 'types':
             types = self.get_db().get_types()
             self.set_buffer_lines( [

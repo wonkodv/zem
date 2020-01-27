@@ -12,9 +12,9 @@ TOKEN_TYPES = (
     TokenTyp('', '',  'fuzzy',  'name',   'and'),
 )
 
-def tokenize(text, *, ignore=[]):
+def tokenize(text, *, ignore=('options')):
     query = []
-    tts = [tt for tt in TOKEN_TYPES if not tt in ignore]
+    tts = [tt for tt in TOKEN_TYPES if not tt.attribute in ignore]
     for token in text.split():
         if not token:
             continue
