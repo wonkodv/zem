@@ -333,6 +333,8 @@ class Plugin(object):
     def update_matches(self, matches, tokens):
         self.logger.info("Update matches: %d %r", len(matches), tokens)
 
+        matches = tuple(reversed(matches))
+
         self._last_fetched_tokens = tokens
         self.candidates = matches
 
