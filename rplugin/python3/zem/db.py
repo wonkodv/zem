@@ -91,7 +91,8 @@ class DB(TWMI):
                 length(name) ASC,
                 subprio DESC,
                 name  ASC,
-                type ASC
+                type ASC,
+                length(file) ASC
             """.format(where)
         if limit:
             q+="""
