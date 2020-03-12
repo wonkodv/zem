@@ -217,10 +217,5 @@ class TWMITest(unittest.TestCase):
         assert t.x == 1
         assert t.y == 2
 
-           
-
-
-
-
 if __name__ == '__main__':
     unittest.main(warnings='error')

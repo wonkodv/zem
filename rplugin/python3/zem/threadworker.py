@@ -35,7 +35,7 @@ class ThreadWorker(threading.Thread):
     def post_async(self, f, args=(), kwargs={}):
         self._q.put((f, None, args, kwargs))
 
-    def post_sync(self, f, args, kwargs, timeout=None):
+    def post_sync(self, f, args=(), kwargs={}, timeout=None):
         if threading.current_thread() == self:
             return f(*args, **kwargs)
 
@@ -51,8 +51,10 @@ class ThreadWorker(threading.Thread):
             raise evt.exc from None
 
     def stop(self, timeout=None):
-        self.post_async(self.STOP)
-        self.join(timeout)
+        if threading.current_thread() == self:
+            self._stopped = True
+        else:
+            self.post_sync(self.stop, timeout=timeout)
 
     def __del__(self):
         if self.is_alive():

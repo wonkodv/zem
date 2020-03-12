@@ -161,6 +161,7 @@ class DB(TWMI):
         params = and_params + or_params
         return where, params
 
+    @TWMI.sync_call
     def close(self):
         self.con.close()
         self.con = None
