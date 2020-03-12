@@ -79,7 +79,7 @@ def _file_walk(root, exclude, exclude_files):
 
     def walk(d, exclude_stack):
         if d.is_file():
-            yield d.relative_to(root)
+            yield d
             return
         for f in exclude_files:
             p = d/f
