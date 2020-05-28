@@ -170,7 +170,7 @@ def lines(settings):
             logger.info("File too large: {} {}b", p, size)
             continue
         logger.info("indexing: {}", p)
-        with p.open("rt") as f:
+        with p.open("rt", encoding='utf-8', errors='replace') as f:
             for i, line in enumerate(f):
                 line = line.strip()
                 if r.search(line):
@@ -212,7 +212,7 @@ def words(settings):
             logger.info("File too large: {} {}b", p, size)
             continue
         logger.info("indexing: {}", p)
-        with p.open("rt") as f:
+        with p.open("rt", encoding='utf-8', errors='replace') as f:
             for i, line in enumerate(f):
                 line = line.strip()
                 for m in r.finditer(line):
