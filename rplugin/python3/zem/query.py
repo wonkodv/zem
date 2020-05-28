@@ -48,3 +48,7 @@ def tokenize(text, *, ignore=('options')):
                 query.append((tt, s))
                 break
     return query
+
+def tokens_to_string(tokens):
+    return " ".join(tt.key+t for (tt,t) in tokens)
+

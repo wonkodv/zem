@@ -101,22 +101,29 @@ class DB(TWMI):
             q+="""
             LIMIT {:d} """.format(limit)
 
+        self.logger.debug("Get where %s, %r", where, params)
 
-        t = time.time()
-        result = self.con.execute(q, params).fetchall()
-        t = time.time() - t
+        try:
+            t = time.time()
+            result = self.con.execute(q, params).fetchall()
+        except sqlite3.OperationalError:
+            t = time.time() - t
+            self.logger.debug("Interrupted after %.2fms", t*1000)
+            raise
 
-        self.logger.debug("%s, %r in %.2fms", q, params, t/1000)
+        t = t - time.time()
+
+        self.logger.debug("%d results in %.2fms", len(result), t*1000)
         return result
 
     @TWMI.async_call
     def get_async(self, tokens, callback, *, limit=None):
+        self.logger.debug("get_async %r", tokens)
         try:
             result = self.get(tokens, limit)
             callback(tokens=tokens, result=result)
         except sqlite3.OperationalError:
-            pass # we were interrupted
-
+            pass
 
     @TWMI.sync_call
     def get_types(self):

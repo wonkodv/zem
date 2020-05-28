@@ -87,8 +87,10 @@ class Plugin(object):
             pass
 
     def setting(self, key, default):
-        val = self.nvim.vars.get("zem_{}".format(key), default)
-        return val
+        try:
+            return self.nvim.vars.get("zem_{}".format(key), default)
+        except neovim.NvimError as e:
+            return default
 
     def cmd(self, cmd):
         self.nvim.command(cmd)
@@ -319,10 +321,12 @@ class Plugin(object):
         if tokens == self._last_triggered_tokens:
             self.logger.debug("Ignore Update for %r", tokens)
         else:
+            db = self.get_db()
             self._last_triggered_tokens = tokens
             self.logger.info("Trigger Update: %r", tokens)
-            self.get_db().interrupt()
-            self.get_db().get_async(
+            self.set_buffer_lines_with_usage(["== Fetching ==", tokens_to_string(tokens)])
+            db.interrupt()
+            db.get_async(
                 tokens=tokens,
                 limit=self.setting('result_count', 20),
                 callback=self.fetch_matches_cb)
@@ -342,7 +346,7 @@ class Plugin(object):
             self.set_buffer_lines([
                 "== No Matches ==",
                 "Maybe update the Database with <C-U>?",
-                "tokens: {}".format(tokens),
+                "tokens: {}".format(tokens_to_string(tokens))
             ])
         else:
             markup = self.setting("format", self.format_match)
