@@ -12,16 +12,16 @@ from . import scanner
 from . import complete
 from pathlib import Path
 
-from .query import tokenize
+from .query import tokenize, tokens_to_string
 
-VERSION = '0.3'
+VERSION = '0.4'
 
 USAGE = """== ZEM v{} ==
 Query Syntax:
     WORD    fuzzy match against Name
     =WORD   prefix match against types. Multiple Types enlarge the ResultSet
     :WORD   fuzzy match against Extra (e.g. surronding class, ...)
-    /WORD   fuzzy match against Path
+    WO/RD   fuzzy match against Path
     !WORD   exact match against name
 Special Keys:
     <ESC>       Stop ZEM, don't change location
@@ -211,13 +211,13 @@ class Plugin(object):
         if text:
             tokens = tokenize(text)
             if tokens:
-                if tokens != self._last_fetched_tokens:
-                    match = self.get_db().get(tokens, limit=1)[0]
-                else:
-                    try:
+                try:
+                    if tokens != self._last_fetched_tokens:
+                        matches = self.get_db().get(tokens, limit=1)[0]
+                    else:
                         match = self.candidates[idx]
-                    except (AttributeError, IndexError):
-                        match = None
+                except (AttributeError, IndexError):
+                    match = None
 
         if match:
             cmd = "edit"
@@ -292,7 +292,7 @@ class Plugin(object):
                     self.nvim.input("<BS>"*(len(action)+2)) # remove <action>
                     self.action(action)
             else:
-                self.fetch_matches(text)
+                self.nvim.async_call(self.fetch_matches, text)
         except:
             self.on_error()
 
