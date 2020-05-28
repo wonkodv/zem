@@ -32,6 +32,7 @@ class DB(TWMI):
         self.THREAD_WORKER_DAEMON=True
         super().__init__()
         self.location = location
+        self._size = None
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__qualname__}")
 
         self._check_and_init()
@@ -54,8 +55,9 @@ class DB(TWMI):
 
     @TWMI.sync_call
     def get_size(self):
-        r = self.con.execute("SELECT COUNT(*) FROM zem;").fetchone()
-        return r[0]
+        if self._size is None:
+            self._size = self.con.execute("SELECT COUNT(*) FROM zem;").fetchone()[0]
+        return self._size
 
     @TWMI.sync_call
     def get_stat(self):
@@ -64,6 +66,7 @@ class DB(TWMI):
 
     @TWMI.sync_call
     def fill(self, datas, wipe=True):
+        self._size = None
         with self.con as con:
             if wipe:
                 con.execute("DELETE FROM zem");
