@@ -160,7 +160,10 @@ class Plugin(object):
         self.cmd("wincmd n")
         self.zem_window = self.nvim.current.window
         self.buffer = self.nvim.current.buffer
-        self.buffer.name = "ZEM"
+        try:
+            self.buffer.name = "ZEM"
+        except neovim.NvimError:
+            self.cmd("edit ZEM")
         self.cmd("setlocal winminheight=1")
         self.cmd("setlocal buftype=nofile")
         self.cmd("setlocal noswapfile")
@@ -313,6 +316,9 @@ class Plugin(object):
     def fetch_matches(self, text):
         """ Trigger an Updatet of the matches in the preview window. """
 
+        if self.buffer is None:
+            return # the Zem Buffer was closed since the async call to this function was queued
+
         tokens = tokenize(text)
         if not any(tokens):
             self.set_buffer_lines_with_usage(["== Nothing to Display ==", "Enter a Query"])
@@ -335,6 +341,9 @@ class Plugin(object):
         self.nvim.async_call(self.update_matches, result, tokens)
 
     def update_matches(self, matches, tokens):
+        if self.buffer is None:
+            return # the Zem Buffer was closed since the async call to this function was queued
+
         self.logger.info("Update matches: %d %r", len(matches), tokens)
 
         matches = tuple(reversed(matches))
@@ -403,9 +412,9 @@ class Plugin(object):
 
     def set_buffer_lines(self, lines):
         if not self.buffer:
-            raise TypeError("Setting buffer Lines when buffer is closed")
+            return #raise TypeError("Setting buffer Lines when buffer is closed")
         if not self.nvim.current.buffer == self.buffer:
-            raise TypeError("Setting buffer Lines but not in ZEM Buffer")
+            return #raise TypeError("Setting buffer Lines but not in ZEM Buffer")
         self.buffer[:] = lines
         self.cmd("{}wincmd _".format(min(len(lines), self.setting('height',25 ))))
         self.cmd("normal G")   # select first result

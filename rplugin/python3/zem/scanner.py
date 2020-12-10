@@ -309,7 +309,7 @@ def tags(settings):
         )
         logger.info("ctags: " + p.stdout.read())
         if p.wait() != 0:
-            raise OSError("Non 0 Return Code", p.returncode, p.stderr.read())
+            raise OSError("Non 0 Return Code", p.returncode, p.stderr.read(), command)
 
     if not tag_file:
         for f in '.tags', 'tags':
