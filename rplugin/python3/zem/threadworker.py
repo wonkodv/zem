@@ -1,13 +1,15 @@
 import functools
-import logging
 import queue
 import threading
 import warnings
 
+
 class ThreadWorker(threading.Thread):
     STOP = object()
+
     class NotStarted(Exception):
         pass
+
     class Timeout(Exception):
         pass
 
@@ -30,7 +32,9 @@ class ThreadWorker(threading.Thread):
                 try:
                     f(*args, **kwargs)
                 except Exception as ex:
-                    warnings.warn(UserWarning("Uncought Exception in Threadworker Job", ex))
+                    warnings.warn(
+                        UserWarning("Uncought Exception in Threadworker Job", ex)
+                    )
 
     def post_async(self, f, args=(), kwargs={}):
         self._q.put((f, None, args, kwargs))
@@ -44,7 +48,7 @@ class ThreadWorker(threading.Thread):
         evt = threading.Event()
         self._q.put((f, evt, args, kwargs))
         if not evt.wait(timeout):
-            raise Timeout()
+            raise ThreadWorker.Timeout()
         try:
             return evt.res
         except AttributeError:
@@ -60,10 +64,12 @@ class ThreadWorker(threading.Thread):
         if self.is_alive():
             try:
                 self.stop()
-            except:
+            except BaseException:
                 pass
             if not self.daemon:
-                warnings.warn(ResourceWarning("ThreadWorker was not stopped", self), source=self)
+                warnings.warn(
+                    ResourceWarning("ThreadWorker was not stopped", self), source=self
+                )
 
     def __call__(self, sync=False):
         if sync:
@@ -74,13 +80,16 @@ class ThreadWorker(threading.Thread):
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             self.post_async(f, args, kwargs)
+
         return proxy
 
     def sync_call(self, f):
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             return self.post_sync(f, args, kwargs)
+
         return proxy
+
 
 class ThreadWorkerMixin:
     THREAD_WORKER_DAEMON = None
@@ -90,7 +99,9 @@ class ThreadWorkerMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self._thread_worker is None:
-            self._thread_worker = ThreadWorker(daemon=self.THREAD_WORKER_DAEMON, name=self.THREAD_WORKER_NAME)
+            self._thread_worker = ThreadWorker(
+                daemon=self.THREAD_WORKER_DAEMON, name=self.THREAD_WORKER_NAME
+            )
         self._thread_worker.start()
 
     def stop_thredworker(self):
@@ -101,6 +112,7 @@ class ThreadWorkerMixin:
         @functools.wraps(f)
         def proxy(*args, **kwargs):
             args[0]._thread_worker.post_async(f, args, kwargs)
+
         return proxy
 
     @staticmethod
@@ -108,12 +120,15 @@ class ThreadWorkerMixin:
         def deco(f):
             @functools.wraps(f)
             def proxy(*args, **kwargs):
-                return args[0]._thread_worker.post_sync(f, args, kwargs, timeout=timeout)
+                return args[0]._thread_worker.post_sync(
+                    f, args, kwargs, timeout=timeout
+                )
+
             return proxy
+
         if callable(timeout_or_function):
             timeout = None
             return deco(timeout_or_function)
         else:
             timeout = timeout_or_function
             return deco
-
