@@ -1,13 +1,9 @@
+import logging
+import queue
 import sqlite3
-
-from .query import TOKEN_TYPES
+import time
 
 from .threadworker import ThreadWorkerMixin as TWMI
-
-import logging
-import time
-import threading
-import queue
 
 
 class DB(TWMI):
@@ -25,11 +21,11 @@ class DB(TWMI):
         );
         CREATE INDEX zem_type ON zem(type);
         """
-    _COLUMNS = ['name', 'type', 'file', 'extra', 'location', 'prio', 'subprio']
+    _COLUMNS = ["name", "type", "file", "extra", "location", "prio", "subprio"]
 
     def __init__(self, location):
-        self.THREAD_WORKER_NAME=f"DB Worker {location}"
-        self.THREAD_WORKER_DAEMON=True
+        self.THREAD_WORKER_NAME = f"DB Worker {location}"
+        self.THREAD_WORKER_DAEMON = True
         super().__init__()
         self.location = location
         self._size = None
@@ -61,7 +57,15 @@ class DB(TWMI):
 
     @TWMI.sync_call
     def get_stat(self):
-        r = self.con.execute("SELECT type, count(name) as cnt FROM zem GROUP BY type;").fetchall()
+        r = self.con.execute(
+            """
+            SELECT
+                type,
+                count(name) as cnt
+            FROM zem
+            GROUP BY type
+            """
+        ).fetchall()
         return r
 
     @TWMI.sync_call
@@ -69,13 +73,15 @@ class DB(TWMI):
         self._size = None
         with self.con as con:
             if wipe:
-                con.execute("DELETE FROM zem");
-            for data in datas: # can pass several iterators
-                con.executemany("""
-                        INSERT INTO zem 
-                                (name, type, file, extra, location, prio, subprio)
-                        VALUES (?,     ?,    ?,    ?,     ?,        ?,    ?)""",
-                        data)
+                con.execute("DELETE FROM zem")
+            for data in datas:  # can pass several iterators
+                con.executemany(
+                    """
+                    INSERT INTO zem
+                            (name, type, file, extra, location, prio, subprio)
+                    VALUES (?,     ?,    ?,    ?,     ?,        ?,    ?)""",
+                    data,
+                )
             con.commit()
         con.execute("ANALYZE zem")
 
@@ -96,10 +102,14 @@ class DB(TWMI):
                 name  ASC,
                 type ASC,
                 length(file) ASC
-            """.format(where)
+            """.format(
+            where
+        )
         if limit:
-            q+="""
-            LIMIT {:d} """.format(limit)
+            q += """
+            LIMIT {:d} """.format(
+                limit
+            )
 
         self.logger.debug("Get where %s, %r", where, params)
 
@@ -108,12 +118,12 @@ class DB(TWMI):
             result = self.con.execute(q, params).fetchall()
         except sqlite3.OperationalError:
             t = time.time() - t
-            self.logger.debug("Interrupted after %.2fms", t*1000)
+            self.logger.debug("Interrupted after %.2fms", t * 1000)
             raise
 
         t = t - time.time()
 
-        self.logger.debug("%d results in %.2fms", len(result), t*1000)
+        self.logger.debug("%d results in %.2fms", len(result), t * 1000)
         return result
 
     @TWMI.async_call
@@ -135,8 +145,7 @@ class DB(TWMI):
             ORDER BY
                 type ASC
             """
-        return [r['type'] for r in self.con.execute(q)]
-
+        return [r["type"] for r in self.con.execute(q)]
 
     def _tokens_to_where_clause(self, tokens):
         and_clauses = []
@@ -146,21 +155,21 @@ class DB(TWMI):
         for typ, val in tokens:
             pos, key, match_type, column, op = typ
 
-            if typ.matchtyp == 'fuzzy':
+            if typ.matchtyp == "fuzzy":
                 val = "%{}%".format("%".join(val))
-            elif typ.matchtyp == 'exact':
+            elif typ.matchtyp == "exact":
                 pass
-            elif typ.matchtyp == 'prefix':
+            elif typ.matchtyp == "prefix":
                 val = "{}%".format(val)
-            elif typ.matchtyp == 'ignore':
+            elif typ.matchtyp == "ignore":
                 continue
             else:
                 raise ValueError("unknown type", match_type)
 
-            if typ.grouping == 'and':
+            if typ.grouping == "and":
                 and_clauses.append("{} LIKE ?".format(column))
                 and_params.append(val)
-            elif typ.grouping == 'or':
+            elif typ.grouping == "or":
                 or_clauses.append("{} LIKE ?".format(column))
                 or_params.append(val)
 

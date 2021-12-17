@@ -1,20 +1,20 @@
-
 import collections
 
-TokenTyp = collections.namedtuple('TokenTyp','pos key matchtyp attribute grouping ')
+TokenTyp = collections.namedtuple("TokenTyp", "pos key matchtyp attribute grouping ")
 
 TOKEN_TYPES = (
-    TokenTyp('start', '=', 'prefix', 'type',   'or'),
-    TokenTyp('in', '/', 'fuzzy',  'file',   'and'),
-    TokenTyp('start', '-', 'ignore', 'option', None),
-    TokenTyp('start', ':', 'fuzzy',  'extra',  'and'),
-    TokenTyp('in', '!', 'exact', 'name',   'and'),
-    TokenTyp('', '',  'fuzzy',  'name',   'and'),
+    TokenTyp("start", "=", "prefix", "type", "or"),
+    TokenTyp("in", "/", "fuzzy", "file", "and"),
+    TokenTyp("start", "-", "ignore", "option", None),
+    TokenTyp("start", ":", "fuzzy", "extra", "and"),
+    TokenTyp("in", "!", "exact", "name", "and"),
+    TokenTyp("", "", "fuzzy", "name", "and"),
 )
 
-def tokenize(text, *, ignore=('options')):
+
+def tokenize(text, *, ignore=("options")):
     query = []
-    tts = [tt for tt in TOKEN_TYPES if not tt.attribute in ignore]
+    tts = [tt for tt in TOKEN_TYPES if tt.attribute not in ignore]
     for token in text.split():
         if not token:
             continue
@@ -23,22 +23,22 @@ def tokenize(text, *, ignore=('options')):
             if not tt.key:
                 s = token
             else:
-                if tt.pos == 'start':
+                if tt.pos == "start":
                     if token.startswith(tt.key):
                         if len(token) > len(tt.key):
-                            s = token[len(tt.key):]
+                            s = token[len(tt.key) :]
                         else:
                             break
-                elif tt.pos == 'end':
+                elif tt.pos == "end":
                     if token.endswith(tt.key):
                         if len(token) > len(tt.key):
-                            s = token[:-len(tt.key)]
+                            s = token[: -len(tt.key)]
                         else:
                             break
-                elif tt.pos == 'in':
+                elif tt.pos == "in":
                     if tt.key in token:
                         if len(token) > len(tt.key):
-                            s = token.replace(tt.key,"",1)
+                            s = token.replace(tt.key, "", 1)
                         else:
                             break
                 else:
@@ -49,6 +49,6 @@ def tokenize(text, *, ignore=('options')):
                 break
     return query
 
-def tokens_to_string(tokens):
-    return " ".join(tt.key+t for (tt,t) in tokens)
 
+def tokens_to_string(tokens):
+    return " ".join(tt.key + t for (tt, t) in tokens)
