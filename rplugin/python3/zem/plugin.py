@@ -165,15 +165,18 @@ class Plugin(object):
         except neovim.NvimError:
             self.cmd("edit ZEM")
         self.cmd("setlocal winminheight=1")
-        self.cmd("setlocal buftype=nofile")
+        self.cmd("setlocal buftype=nowrite") # TODO: buftype=prompt
+        self.cmd("setlocal bufhidden=delete")
         self.cmd("setlocal noswapfile")
         self.cmd("setlocal nowrap")
         self.cmd("setlocal nonumber")
+        self.cmd("setlocal nohlsearch")
         self.cmd("setlocal nolist")
         self.cmd("setlocal cursorline")
         self.cmd("setlocal nocursorcolumn")
         self.cmd("setlocal scrolloff=0")
         self.cmd("setlocal filetype=zem_preview") #TODO: add FT file
+        self.cmd("{}wincmd _".format(self.setting('height',25 )))
         self.cmd("wincmd J")
         self.cmd("redraw")
         for k,r in self.REMAPED_KEYS.items():
@@ -419,6 +422,7 @@ class Plugin(object):
         self.cmd("{}wincmd _".format(min(len(lines), self.setting('height',25 ))))
         self.cmd("normal G")   # select first result
         self.cmd("redraw")
+        self.cmd("normal G")   # select first result again because sometimes there are issues???
 
     def set_buffer_lines_with_usage(self, lines):
         db = self.get_db()
