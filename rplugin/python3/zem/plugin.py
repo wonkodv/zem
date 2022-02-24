@@ -1,7 +1,9 @@
 import logging
 import os
 import pathlib
+import queue
 import re
+import threading
 import time
 import traceback
 
@@ -45,6 +47,13 @@ class BetterLogRecord(logging.LogRecord):
 
 
 logging.setLogRecordFactory(BetterLogRecord)
+
+
+def thread_excepthook(typ, val, tb, thr):
+    logging.getLogger("threading").exception(val)
+
+
+threading.excepthook = thread_excepthook
 
 
 @neovim.plugin
@@ -119,12 +128,14 @@ class Plugin(object):
     def zem_update_index(self, *args):
         """Fill the database."""
         t = time.perf_counter()
-        self.update_index()
-        t = time.perf_counter() - t
-        s = self.get_db().get_size()
-        self.nvim.out_write(
-            "echomsg 'Scanned {} elements in {:.3f} seconds'\n".format(s, t)
-        )
+
+        def cb(count):
+            d = time.perf_counter() - t
+            self.nvim.out_write(
+                f"echomsg 'Scanned {count} elements in {d:.3f} seconds'\n"
+            )
+
+        self.update_index(cb)
 
     @neovim.command("ZemEdit", nargs="1", sync=True)
     def zem_edit(self, args):
@@ -389,18 +400,25 @@ class Plugin(object):
             self.cmd("redraw")
         elif action == "update":
             self.set_buffer_lines(["Updating..."])
+
             t = time.perf_counter()
-            self.update_index()
-            t = time.perf_counter() - t
-            s = self.get_db().get_size()
-            i = self.get_db().get_stat()
-            self.set_buffer_lines(
-                [
-                    f"Found {s} elements in {t:.3f} seconds",
-                    *(" {:20s} {:5d}".format(r["type"], r["cnt"]) for r in i),
-                ]
-            )
-            self._last_fetched_tokens = None  # update after the BS are sent
+
+            def cb(_):
+                s = self.get_db().get_size()
+                i = self.get_db().get_stat()
+                d = time.perf_counter() - t
+                self.set_buffer_lines(
+                    [
+                        "Updating ... Done",
+                        f"Found {s} elements in {d:.3f} seconds",
+                        *(" {:20s} {:5d}".format(r["type"], r["cnt"]) for r in i),
+                    ]
+                )
+                self._last_triggered_tokens = None
+                self._last_fetched_tokens = None
+
+            self.update_index(cb)
+
         elif action == "types":
             types = self.get_db().get_types()
             self.set_buffer_lines(
@@ -463,19 +481,39 @@ class Plugin(object):
         )
         self.set_buffer_lines(lines)
 
-    def update_index(self):
+    def update_index(self, callback):
         # Make paths in scanners relative to buffer's cwd
         os.chdir(self.nvim.funcs.getcwd())
-        data = []
-        for source, param in self.setting("sources", [["files", {}], ["tags", {}]]):
+
+        jobs = []
+        sources = self.setting("sources", [["files", {}], ["tags", {}]])
+        for source, param in sources:
             base_param = self.setting("source_{}".format(source), {}).copy()
             base_param.update(param)
+            func = getattr(scanner, source)
+            jobs.append((func, base_param))
 
-            func = getattr(scanner, source, None)
-            if func:
-                d = func(base_param)
-            else:
-                d = self.nvim.call(source, base_param)
-            data.append(d)
+        db = self.get_db()
 
-        self.get_db().fill(data)
+        q = queue.SimpleQueue()
+
+        def do_scan(func, args):
+            q.put(func(args))
+
+        for func, arg in jobs:
+            threading.Thread(target=do_scan, args=(func, arg)).start()
+
+        def finish():
+            datas = []
+            count = 0
+            for _ in range(len(jobs)):
+                data = q.get()
+                count += len(data)
+                datas.append(data)
+            t = time.perf_counter()
+            db.fill(datas)
+            t = time.perf_counter() - t
+            self.logger.info(f"Putting {count} records in the db took {t:.3f}s")
+            self.nvim.async_call(callback, count)
+
+        threading.Thread(target=finish).start()

@@ -3,6 +3,7 @@ import logging
 import pathlib
 import re
 import subprocess
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -135,11 +136,18 @@ def files(settings={}):
     root = pathlib.Path(root)
 
     logger.info("Index files in {}", root.absolute().as_posix())
-    for f in _file_walk(root, exclude, exfiles):
-        yield (f.name, typ, f.as_posix(), None, None, prio, subprio)
+    t = time.perf_counter()
+    files = [
+        (f.name, typ, f.as_posix(), None, None, prio, subprio)
+        for f in _file_walk(root, exclude, exfiles)
+    ]
+    t = time.perf_counter() - t
+    logger.info("Indexed {} files in {:.3f}s", len(files), t)
+
+    return files
 
 
-def lines(settings):
+def lines(settings={}):
     """Index lines of files.
 
     to only search some files, set exclude to '*','!*.c','!*.h' and
@@ -168,10 +176,11 @@ def lines(settings):
 
     root = pathlib.Path(root)
 
-    logger.debug("Index content of files in {}", root.absolute().as_posix())
-
     r = re.compile(r)
 
+    logger.info("Index lines in files in {}", root.absolute().as_posix())
+    t = time.perf_counter()
+    data = []
     for p in _file_walk(root, exclude, exfiles):
         size = p.stat().st_size
         if size > limit:
@@ -182,10 +191,15 @@ def lines(settings):
             for i, line in enumerate(f):
                 line = line.strip()
                 if r.search(line):
-                    yield (line, typ, p.as_posix(), None, i + 1, prio, subprio)
+                    data.append((line, typ, p.as_posix(), None, i + 1, prio, subprio))
+
+    t = time.perf_counter() - t
+    logger.info("Indexed {} lines in {:.3f}s", len(data), t)
+
+    return data
 
 
-def words(settings):
+def words(settings={}):
     """Index lines of files.
 
     to only search some files, set exclude to '*','!*.c','!*.h' and
@@ -214,9 +228,11 @@ def words(settings):
 
     root = pathlib.Path(root)
 
-    logger.debug("Index words of files in {}", root.absolute().as_posix())
-
     r = re.compile(r)
+
+    logger.info("Index words in files in {}", root.absolute().as_posix())
+    t = time.perf_counter()
+    data = []
 
     for p in _file_walk(root, exclude, exfiles):
         size = p.stat().st_size
@@ -228,7 +244,13 @@ def words(settings):
             for i, line in enumerate(f):
                 line = line.strip()
                 for m in r.finditer(line):
-                    yield (m.group(0), typ, p.as_posix(), line, i + 1, prio, subprio)
+                    data.append(
+                        (m.group(0), typ, p.as_posix(), line, i + 1, prio, subprio)
+                    )
+    t = time.perf_counter() - t
+    logger.info("Indexed {} words in {:.3f}", len(data), t)
+
+    return data
 
 
 # ctags --list-kinds
@@ -300,7 +322,7 @@ TAGS_DEFAULT_TYPE_MAP = {
 }
 
 
-def tags(settings):
+def tags(settings={}):
     logger = _logger.getChild("tags")
 
     logger.debug("running in %s", pathlib.Path.cwd().absolute())
@@ -313,6 +335,8 @@ def tags(settings):
     if command:
         if tag_file[0] == "!":
             raise ValueError("specifyiing both command and !file", command, tag_file)
+        logger.info(f"running {command}")
+        t = time.perf_counter()
         p = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -320,7 +344,10 @@ def tags(settings):
             stderr=subprocess.PIPE,
             universal_newlines=True,
         )
-        logger.info("ctags: " + p.stdout.read())
+        t = time.perf_counter() - t
+        logger.info(
+            f"ctags took {t:.3f}s " + p.stdout.read()
+        )  # if --totals, print that
         if p.wait() != 0:
             raise OSError("Non 0 Return Code", p.returncode, p.stderr.read(), command)
 
@@ -330,10 +357,11 @@ def tags(settings):
                 tag_file = f
 
     if not tag_file:
-        tag_file = "!ctags -o - --recurse"
+        tag_file = "!ctags -o - --recurse --sort=no"
 
     if tag_file[0] == "!":
         logger.info("running %s", tag_file)
+        t = time.perf_counter()
         p = subprocess.Popen(
             tag_file[1:],
             stdin=subprocess.PIPE,
@@ -342,6 +370,8 @@ def tags(settings):
             shell=True,
         )
         f = p.stdout
+        t = time.perf_counter() - t
+        logger.info(f"ctags took {t:.3f}s")
     else:
         p = None
         logger.info("Parsing %s", tag_file)
@@ -350,7 +380,9 @@ def tags(settings):
 
     f = io.TextIOWrapper(f, errors="replace")
 
-    count = 0
+    data = []
+
+    t = time.perf_counter() - t
     with f:
         for line in f:
             if line.startswith("!"):
@@ -385,8 +417,8 @@ def tags(settings):
                 if ":" not in field:
                     typ = field
                 else:
-                    t, _, val = field.partition(":")
-                    if t == "kind":
+                    k, _, val = field.partition(":")
+                    if k == "kind":
                         typ = val
                     elif val:
                         extra = extra + field + " "
@@ -410,10 +442,11 @@ def tags(settings):
                                 typ, subprio = TAGS_DEFAULT_TYPE_MAP["default"][typ]
                             except KeyError:
                                 typ, subprio = f"X-{ext}-{typ}", 5
-            yield (name, typ, file, extra, location, prio, subprio)
-            count += 1
+            data.append((name, typ, file, extra, location, prio, subprio))
 
-    logger.debug("Parsed %d records", count)
+    count = len(data)
+    t = time.perf_counter() - t
+    logger.debug(f"Parsed {count} tags in {t:.3f} seconds")
 
     if p:
         err = p.stderr.read().decode(errors="replace")
@@ -421,5 +454,7 @@ def tags(settings):
             raise OSError("Non Zero returncode", p.returncode, tag_file, err)
         if err:
             logger.warn("command printed to stderr: %s", err)
-        if not count:
+        if not data:
             logger.warn("No Tags from command ", tag_file)
+
+    return data
