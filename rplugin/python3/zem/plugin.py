@@ -77,9 +77,9 @@ class Plugin(object):
     def __init__(self, nvim):
         self.nvim = nvim
         self.buffer = None
-        log_level = self.setting("loglevel", logging.INFO)
+        log_level = self.setting("loglevel", logging.DEBUG)
         if isinstance(log_level, str):
-            log_level = getattr(logging, log_level.upper(), logging.INFO)
+            log_level = getattr(logging, log_level.upper(), logging.DEBUG)
         logging.getLogger("zem").setLevel(log_level)
 
         self.logger = logging.getLogger(__name__).getChild(type(self).__qualname__)
@@ -89,12 +89,8 @@ class Plugin(object):
 
     def on_error(self):
         self.logger.exception("Exception occured")
-        lines = traceback.format_exc()
-        lines = lines.split("\n")
-        try:
-            self.set_buffer_lines(lines)
-        except TypeError:
-            pass
+        ex = traceback.format_exc()
+        self.nvim.async_call(self.nvim.err_write, ex)
 
     def setting(self, key, default):
         try:
@@ -498,22 +494,39 @@ class Plugin(object):
         q = queue.SimpleQueue()
 
         def do_scan(func, args):
-            q.put(func(args))
+            try:
+                data = func(args)
+            except BaseException as e:
+                self.on_error()
+                data = []
+            q.put(data)
 
-        for func, arg in jobs:
-            threading.Thread(target=do_scan, args=(func, arg)).start()
+        threads = []
+        for (func, arg) in jobs:
+            t = threading.Thread(target=do_scan, args=(func, arg), name=repr((func, arg)))
+            t.start()
+            self.logger.debug("spawned thread %r", t)
+            threads.append(t)
 
         def finish():
-            datas = []
-            count = 0
-            for _ in range(len(jobs)):
-                data = q.get()
-                count += len(data)
-                datas.append(data)
-            t = time.perf_counter()
-            db.fill(datas)
-            t = time.perf_counter() - t
-            self.logger.info(f"Putting {count} records in the db took {t:.3f}s")
-            self.nvim.async_call(callback, count)
+            try:
+                datas = []
+                count = 0
+                for t in threads:
+                    self.logger.debug(f"Waiting on thread {t}")
+                    t.join()
+
+                    # after t is done, Q has to contain something
+                    data = q.get_nowait()
+                    count += len(data)
+                    datas.append(data)
+                t = time.perf_counter()
+                db.fill(datas)
+                t = time.perf_counter() - t
+                self.logger.info(f"Putting {count} records in the db took {t:.3f}s")
+                self.nvim.async_call(callback, count)
+            except BaseException  as e:
+                self.on_error(e)
+
 
         threading.Thread(target=finish).start()
