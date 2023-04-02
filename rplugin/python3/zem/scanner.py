@@ -86,7 +86,7 @@ def _file_walk(root, exclude, exclude_files):
         for f in exclude_files:
             p = d / f
             if p.is_file():
-                logger.debug("add {} to excludes", f)
+                logger.debug("add {} to excludes", p)
                 with p.open("rt") as f:
                     x = _translate(f, d.relative_to(root).as_posix())
                 exclude_stack = exclude_stack + x
@@ -349,7 +349,7 @@ def tags(settings={}):
             f"ctags took {t:.3f}s " + p.stdout.read()
         )  # if --totals, print that
         if p.wait() != 0:
-            raise OSError("Non 0 Return Code", p.returncode, p.stderr.read(), command)
+            raise Exception("Non 0 Return Code", p.returncode, p.stderr.read(), command)
 
     if not tag_file:
         for f in ".tags", "tags":
@@ -450,8 +450,8 @@ def tags(settings={}):
 
     if p:
         err = p.stderr.read().decode(errors="replace")
-        if p.wait(timeout=0.5) != 0:
-            raise OSError("Non Zero returncode", p.returncode, tag_file, err)
+        if p.wait(timeout=0.5) != 0: # we already read all of stdout and stderr, wait shouldn't take long
+            raise Exception("Non Zero returncode", p.returncode, tag_file, err)
         if err:
             logger.warn("command printed to stderr: %s", err)
         if not data:
