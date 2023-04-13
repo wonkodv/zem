@@ -318,10 +318,10 @@ class Plugin(object):
             self.on_error()
 
     def format_match(self, row):
-        fn = row["file"][-50:]
+        fn = row["file"][-100:]
         loc = row["location"]
         if loc:
-            loc = ":" + loc[:20]
+            loc = ":" + loc[:10]
         else:
             loc = ""
         extra = row["extra"]
@@ -329,7 +329,7 @@ class Plugin(object):
             pass
         else:
             extra = ""
-        return f"{row['name']:35s} {row['type']:15} {fn:>30}{loc:20} {extra}"
+        return f"{row['name']:20s} {row['type']:15} {fn:>90}{loc:20}" # {extra}"
 
     def fetch_matches(self, text):
         """Trigger an Updatet of the matches in the preview window."""
@@ -464,11 +464,8 @@ class Plugin(object):
             return  # raise TypeError("Setting buffer Lines but not in ZEM Buffer")
         self.buffer[:] = lines
         self.cmd("{}wincmd _".format(min(len(lines), self.setting("height", 25))))
-        self.cmd("normal G")  # select first result
+        self.cmd("normal Gzb")  # select first result, scroll it to bottom
         self.cmd("redraw")
-        self.cmd(
-            "normal G"
-        )  # select first result again because sometimes there are issues???
 
     def set_buffer_lines_with_usage(self, lines):
         db = self.get_db()
@@ -478,6 +475,7 @@ class Plugin(object):
         self.set_buffer_lines(lines)
 
     def update_index(self, callback):
+        self.logger.debug("Starting update")
         # Make paths in scanners relative to buffer's cwd
         os.chdir(self.nvim.funcs.getcwd())
 

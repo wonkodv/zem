@@ -325,12 +325,13 @@ TAGS_DEFAULT_TYPE_MAP = {
 def tags(settings={}):
     logger = _logger.getChild("tags")
 
-    logger.debug("running in %s", pathlib.Path.cwd().absolute())
 
     tag_file = settings.get("file")
     prio = settings.get("prio", 100)
     type_map = settings.get("type_map", {})
     command = settings.get("command")
+
+    logger.debug("running ctags in %s, tag_file=%s, command=%s, prio=%d", pathlib.Path.cwd().absolute(), tag_file, command, prio)
 
     if command:
         if tag_file[0] == "!":
@@ -345,11 +346,12 @@ def tags(settings={}):
             universal_newlines=True,
         )
         t = time.perf_counter() - t
-        logger.info(
-            f"ctags took {t:.3f}s " + p.stdout.read()
-        )  # if --totals, print that
-        if p.wait() != 0:
-            raise Exception("Non 0 Return Code", p.returncode, p.stderr.read(), command)
+        if p.wait() == 0:
+            logger.info(
+                f"ctags took {t:.3f}s " + p.stdout.read() +  p.stderr.read()
+            )  # if --totals, print that
+        else:
+            raise OSError("Non 0 Return Code", p.returncode, p.stderr.read(), command)
 
     if not tag_file:
         for f in ".tags", "tags":
