@@ -481,45 +481,48 @@ class Plugin(object):
 
         jobs = []
         sources = self.setting("sources", [["files", {}], ["tags", {}]])
-        for source, param in sources:
+        for job_number, (source, param) in enumerate(sources):
             base_param = self.setting("source_{}".format(source), {}).copy()
             base_param.update(param)
             func = getattr(scanner, source)
-            jobs.append((func, base_param))
+            name = base_param.get("name") or base_param.get('file') or base_param.get('root') or source
+            jobs.append((job_number, name,func, base_param))
 
         db = self.get_db()
 
         q = queue.SimpleQueue()
 
-        def do_scan(func, args):
+        def do_scan(number, name, func, args):
+            self.logger.debug("Starting Job %d: %s", number, name)
             try:
                 data = func(args)
-            except BaseException as e:
+                self.logger.debug("Job %d: %s got %d records", number, name, len(data))
+            except BaseException:
+                self.logger.exception("Job %d: %s got an Exception", number, name, len(data))
                 self.on_error()
                 data = []
-            q.put(data)
+            q.put((number, name, data))
 
-        threads = []
-        for func, arg in jobs:
+
+        for number, name, func, arg in jobs:
+            self.logger.debug("Starting thread for job %d: %s", number, name)
             t = threading.Thread(
-                target=do_scan, args=(func, arg), name=repr((func, arg))
+                    target=do_scan, name=f"scan {number} {name}", args=(number, name, func, arg)
             )
             t.start()
-            self.logger.debug("spawned thread %r", t)
-            threads.append(t)
 
         def finish():
             try:
                 datas = []
+                missing = set(range(len(jobs)))
                 count = 0
-                for t in threads:
-                    self.logger.debug(f"Waiting on thread {t}")
-                    t.join()
-
-                    # after t is done, Q has to contain something
-                    data = q.get_nowait()
+                while missing:
+                    self.logger.debug("Waiting on jobs %r", missing)
+                    number, name, data = q.get()
+                    missing.remove(number)
                     count += len(data)
                     datas.append(data)
+                    self.logger.debug("Recived %d records from %d:%s", len(data), number, name)
                 t = time.perf_counter()
                 db.fill(datas)
                 t = time.perf_counter() - t

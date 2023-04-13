@@ -118,7 +118,7 @@ def files(settings={}):
     root = settings.get("root", ".")
     typ = settings.get("type", "File")
     subprio = settings.get("subprio", 50)
-    prio = settings.get("prio", 100)
+    prio = settings.get("prio", 99)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     exclude = settings.get(
         "exclude",
@@ -157,7 +157,7 @@ def lines(settings={}):
 
     root = settings.get("root", ".")
     typ = settings.get("type", "UseLine")
-    prio = settings.get("prio", 50)
+    prio = settings.get("prio", 49)
     subprio = settings.get("subprio", 50)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     limit = settings.get("size_limit", 1 * 1024 * 1024)
@@ -209,7 +209,7 @@ def words(settings={}):
 
     root = settings.get("root", ".")
     typ = settings.get("type", "UseWord")
-    prio = settings.get("prio", 50)
+    prio = settings.get("prio", 48)
     subprio = settings.get("subprio", 40)
     exfiles = settings.get("exclude_files", [".gitignore", ".p4ignore"])
     limit = settings.get("size_limit", 100 * 1024)
@@ -327,7 +327,7 @@ def tags(settings={}):
 
 
     tag_file = settings.get("file")
-    prio = settings.get("prio", 100)
+    prio = settings.get("prio", 99)
     type_map = settings.get("type_map", {})
     command = settings.get("command")
 
@@ -364,18 +364,17 @@ def tags(settings={}):
     if tag_file[0] == "!":
         logger.info("running %s", tag_file)
         t = time.perf_counter()
-        p = subprocess.Popen(
+        ctags_process = subprocess.Popen(
             tag_file[1:],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
         )
-        f = p.stdout
-        t = time.perf_counter() - t
-        logger.info(f"ctags took {t:.3f}s")
+        f = ctags_process.stdout
+        logger.debug("ctags process: %r", ctags_process)
     else:
-        p = None
+        ctags_process = None
         logger.info("Parsing %s", tag_file)
         tag_file = pathlib.Path(tag_file)
         f = tag_file.open("rb")
@@ -450,10 +449,10 @@ def tags(settings={}):
     t = time.perf_counter() - t
     logger.debug(f"Parsed {count} tags in {t:.3f} seconds")
 
-    if p:
-        err = p.stderr.read().decode(errors="replace")
-        if p.wait(timeout=0.5) != 0: # we already read all of stdout and stderr, wait shouldn't take long
-            raise Exception("Non Zero returncode", p.returncode, tag_file, err)
+    if ctags_process:
+        err = ctags_process.stderr.read().decode(errors="replace")
+        if ctags_process.wait(timeout=0.5) != 0: # we already read all of stdout and stderr, wait shouldn't take long
+            raise OSError("Non Zero returncode", ctags_process.returncode, tag_file, err)
         if err:
             logger.warn("command printed to stderr: %s", err)
         if not data:
