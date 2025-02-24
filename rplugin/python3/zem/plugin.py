@@ -110,7 +110,9 @@ class Plugin(object):
                 # can not skip this because plugin has different cwd
                 loc = pathlib.Path(self.nvim.funcs.getcwd()) / loc
             loc = loc.absolute()
+            _ = loc.read_bytes() # Read all, so file is in cache
             loc = str(loc)
+
 
         db = self._db
         if db is not None:

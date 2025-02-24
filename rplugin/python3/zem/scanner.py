@@ -312,6 +312,12 @@ TAGS_DEFAULT_TYPE_MAP = {
         "m": ("Define", 80),  # macro
         "t": ("TypeDef", 80),  # structs and records
     },
+    "txt": {
+        "t": ("Target", 90),
+        "v": ("Variable", 50),
+        "f": ("Function", 50),
+        "D": ("Option", 60)
+    },
     "default": {
         # k    type          subprio
         "c": ("TypeClass", 90),  # class
